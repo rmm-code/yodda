@@ -10,7 +10,7 @@ import { useUserStore } from "../lib/useUserStore";
 export function Settings() {
     const { theme, toggleTheme } = useThemeStore();
     const { language, setLanguage } = useLanguageStore();
-    const { profile, setProfile, updateProfile } = useUserStore();
+    const { profile, setProfile } = useUserStore();
     const t = getTranslations(language);
     const [photoError, setPhotoError] = React.useState(false);
 
