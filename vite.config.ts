@@ -9,6 +9,16 @@ export default defineConfig({
     host: true,
     port: 5173,
   },
+  preview: {
+    // Allow preview server to be accessed from yodda.app
+    host: true,
+    allowedHosts: [
+      'yodda.app',
+      '.yodda.app', // Allow all subdomains
+      'localhost',
+      '127.0.0.1',
+    ],
+  },
   build: {
     // Production build optimizations
     outDir: 'dist',

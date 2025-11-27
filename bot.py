@@ -12,22 +12,28 @@ import asyncio
 # Load environment variables from .env file
 load_dotenv()
 
+# Configure logging first
+logging.basicConfig(
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    level=logging.INFO
+)
+logger = logging.getLogger(__name__)
+
 # Get bot token from environment variable
 BOT_TOKEN = os.getenv('BOT_TOKEN')
-GROUP_ID = os.getenv('GROUP_ID')  # Optional: Telegram group/channel ID
+GROUP_ID_STR = os.getenv('GROUP_ID')  # Optional: Telegram group/channel ID
+GROUP_ID = None
+if GROUP_ID_STR:
+    try:
+        GROUP_ID = int(GROUP_ID_STR)
+    except ValueError:
+        logger.warning(f"GROUP_ID '{GROUP_ID_STR}' is not a valid integer. Group messaging will be disabled.")
 
 if not BOT_TOKEN:
     print('❌ ERROR: BOT_TOKEN is not set in .env file!')
     print('Please create a .env file and add your bot token:')
     print('BOT_TOKEN=your_bot_token_here')
     exit(1)
-
-# Configure logging
-logging.basicConfig(
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    level=logging.INFO
-)
-logger = logging.getLogger(__name__)
 
 # Initialize bot and dispatcher
 bot = Bot(token=BOT_TOKEN)
@@ -105,9 +111,23 @@ async def get_user_photo_url(user_id: int) -> str:
 async def send_user_info_to_group(user_id: int, user, phone_number: str = None) -> None:
     """Send or update user information in the group."""
     if not GROUP_ID:
+        logger.info(f"GROUP_ID not set, skipping group message for user {user_id}")
         return
     
     try:
+        # First, verify we can access the group
+        try:
+            chat = await bot.get_chat(GROUP_ID)
+            logger.debug(f"Group access verified: {chat.title or chat.username or 'Unknown'}")
+        except Exception as e:
+            logger.error(f"⚠️  Cannot access group {GROUP_ID}: {e}")
+            logger.error("   For PRIVATE groups, ensure:")
+            logger.error("   1. Bot is added as a MEMBER of the group")
+            logger.error("   2. Bot has 'Send Messages' permission")
+            logger.error("   3. GROUP_ID is correct (currently: {})".format(GROUP_ID))
+            logger.error("   Tip: Try /testgroup command to verify access")
+            return  # Don't try to send if we can't access the group
+        
         # Format user info
         name = f"{user.first_name or ''} {user.last_name or ''}".strip() or "N/A"
         username = f"@{user.username}" if user.username else "N/A"
@@ -132,15 +152,20 @@ async def send_user_info_to_group(user_id: int, user, phone_number: str = None) 
                     text=message_text,
                     parse_mode='HTML'
                 )
+                logger.info(f"Updated group message for user {user_id}")
             except Exception as e:
-                logger.error(f"Failed to update group message: {e}")
+                logger.warning(f"Failed to update group message: {e}, sending new message")
                 # If update fails, send new message
-                msg = await bot.send_message(
-                    chat_id=GROUP_ID,
-                    text=message_text,
-                    parse_mode='HTML'
-                )
-                user_group_messages[user_id] = msg.message_id
+                try:
+                    msg = await bot.send_message(
+                        chat_id=GROUP_ID,
+                        text=message_text,
+                        parse_mode='HTML'
+                    )
+                    user_group_messages[user_id] = msg.message_id
+                    logger.info(f"Sent new group message for user {user_id}")
+                except Exception as e2:
+                    logger.error(f"Failed to send new group message: {e2}")
         else:
             # Send new message
             msg = await bot.send_message(
@@ -149,8 +174,22 @@ async def send_user_info_to_group(user_id: int, user, phone_number: str = None) 
                 parse_mode='HTML'
             )
             user_group_messages[user_id] = msg.message_id
+            logger.info(f"✅ Sent group message for user {user_id} to group {GROUP_ID}")
     except Exception as e:
-        logger.error(f"Failed to send user info to group: {e}")
+        error_msg = str(e)
+        logger.error(f"Failed to send user info to group {GROUP_ID}: {error_msg}")
+        
+        # Provide helpful error messages
+        if "chat not found" in error_msg.lower() or "chat_id is empty" in error_msg.lower():
+            logger.error(f"⚠️  GROUP_ID {GROUP_ID} is invalid or bot is not a member of the PRIVATE group.")
+            logger.error("   For PRIVATE groups, you MUST:")
+            logger.error("   1. Add the bot as a MEMBER (not just invite)")
+            logger.error("   2. Give bot 'Send Messages' permission")
+            logger.error("   3. Verify GROUP_ID is correct")
+            logger.error("   Use /testgroup command to test")
+        elif "forbidden" in error_msg.lower():
+            logger.error("   Bot doesn't have permission to send messages in this group")
+            logger.error("   Make bot an admin or give 'Send Messages' permission")
 
 
 def build_web_app_url(user_id: int, user_lang: str) -> str:
@@ -164,13 +203,12 @@ def build_web_app_url(user_id: int, user_lang: str) -> str:
     username = user_profile.get("username", "") or ""
     photo_url = user_photo_urls.get(user_id, "")
     
-    # Build URL with parameters
+    # Always include lang, and include user data if available
     params = {
         "lang": user_lang,
     }
     
-    if user_phone:
-        params["phone"] = user_phone
+    # Always include user profile data if available (even without phone)
     if first_name:
         params["first_name"] = first_name
     if last_name:
@@ -179,6 +217,8 @@ def build_web_app_url(user_id: int, user_lang: str) -> str:
         params["username"] = username
     if photo_url:
         params["photo"] = photo_url
+    if user_phone:
+        params["phone"] = user_phone
     
     # Build query string
     query_string = "&".join([f"{k}={urllib.parse.quote(str(v))}" for k, v in params.items()])
@@ -208,7 +248,10 @@ async def cmd_start(message: Message):
             user_photo_urls[user_id] = photo_url
     
     # Send user info to group (without phone number initially)
-    await send_user_info_to_group(user_id, user)
+    try:
+        await send_user_info_to_group(user_id, user)
+    except Exception as e:
+        logger.error(f"Error sending user info to group: {e}")
     
     # Check if user already has phone number
     user_phone = user_phone_numbers.get(user_id)
@@ -284,6 +327,12 @@ async def handle_language_callback(callback: CallbackQuery):
             if photo_path:
                 photo_url = f"https://api.telegram.org/file/bot{BOT_TOKEN}/{photo_path}"
                 user_photo_urls[user_id] = photo_url
+        
+        # Send user info to group (if not already sent)
+        try:
+            await send_user_info_to_group(user_id, user)
+        except Exception as e:
+            logger.error(f"Error sending user info to group: {e}")
         
         # Check if user already has phone number
         user_phone = user_phone_numbers.get(user_id)
@@ -415,6 +464,64 @@ async def handle_message(message: Message):
     await message.answer(messages["fallback"])
 
 
+@dp.message(Command("testgroup"))
+async def cmd_test_group(message: Message):
+    """Test command to check if bot can send messages to the group."""
+    if not GROUP_ID:
+        await message.answer("❌ GROUP_ID is not set in .env file")
+        return
+    
+    # First, try to get chat info
+    try:
+        chat = await bot.get_chat(GROUP_ID)
+        chat_type = "Private Group" if chat.type == "supergroup" or chat.type == "group" else chat.type
+        chat_name = chat.title or chat.username or "Unknown"
+        await message.answer(
+            f"✅ Group access verified!\n\n"
+            f"📋 Group: {chat_name}\n"
+            f"🔢 ID: {GROUP_ID}\n"
+            f"📝 Type: {chat_type}\n\n"
+            f"Testing message send..."
+        )
+    except Exception as e:
+        await message.answer(
+            f"❌ Cannot access group {GROUP_ID}\n\n"
+            f"Error: {str(e)}\n\n"
+            f"For PRIVATE groups:\n"
+            f"1. Add bot as MEMBER (Group Settings → Members → Add)\n"
+            f"2. Give bot 'Send Messages' permission\n"
+            f"3. Verify GROUP_ID is correct\n\n"
+            f"Current GROUP_ID: {GROUP_ID}"
+        )
+        return
+    
+    # Try to send a test message
+    try:
+        test_msg = await bot.send_message(
+            chat_id=GROUP_ID,
+            text="✅ Bot test message - if you see this in the group, everything works!"
+        )
+        await message.answer(
+            f"✅ SUCCESS!\n\n"
+            f"Test message sent to group!\n"
+            f"Message ID: {test_msg.message_id}\n\n"
+            f"Check the group to confirm the message arrived."
+        )
+        logger.info(f"Test message sent successfully to group {GROUP_ID}")
+    except Exception as e:
+        error_msg = str(e)
+        await message.answer(
+            f"❌ Failed to send message to group\n\n"
+            f"Error: {error_msg}\n\n"
+            f"For PRIVATE groups, ensure:\n"
+            f"1. Bot is a MEMBER (not just invited)\n"
+            f"2. Bot has 'Send Messages' permission\n"
+            f"3. GROUP_ID is correct: {GROUP_ID}\n\n"
+            f"💡 Tip: Make bot an admin temporarily to test"
+        )
+        logger.error(f"Test group message failed: {error_msg}")
+
+
 @dp.errors()
 async def error_handler(update, exception):
     """Handle errors."""
@@ -425,6 +532,19 @@ async def error_handler(update, exception):
 async def main():
     """Start the bot."""
     logger.info('Starting bot...')
+    logger.info(f'Bot token: {BOT_TOKEN[:10]}...')
+    if GROUP_ID:
+        logger.info(f'GROUP_ID: {GROUP_ID}')
+        # Test if we can access the group
+        try:
+            chat = await bot.get_chat(GROUP_ID)
+            logger.info(f'✅ Group found: {chat.title or chat.username or "Unknown"}')
+        except Exception as e:
+            logger.warning(f'⚠️  Cannot access group {GROUP_ID}: {e}')
+            logger.warning('   Make sure the bot is added to the group and GROUP_ID is correct')
+    else:
+        logger.warning('⚠️  GROUP_ID not set - group messaging disabled')
+    
     await dp.start_polling(bot, allowed_updates=["message", "callback_query"])
 
 

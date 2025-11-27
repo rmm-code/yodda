@@ -78,8 +78,14 @@ export function Settings() {
                     return;
                 }
                 
-                // If no profile at all and not in Telegram, use mock data for development
-                if (!profile && !phoneFromUrl) {
+                // Only use mock data if we're in development (not in Telegram) AND no URL params at all
+                // Check if we're actually in Telegram environment
+                const isTelegram = typeof window !== 'undefined' && 
+                    ((window as any).Telegram?.WebApp || window.location.href.includes('t.me'));
+                
+                // Only show mock data if NOT in Telegram and NO URL params
+                if (!isTelegram && !phoneFromUrl && !firstNameFromUrl && !lastNameFromUrl && !usernameFromUrl && !photoFromUrl && !profile) {
+                    console.log('Using mock data for local development');
                     setProfile({
                         id: 123456789,
                         firstName: "John",
