@@ -24,7 +24,10 @@ export function LinksHome() {
         return matchesSearch && matchesFolder;
     });
 
-    const getFolderName = (id: string) => folders.find((f) => f.id === id)?.name || t.links.unknownFolder;
+    const getFolderName = (id: string) => {
+        if (id === "default") return t.folders.general;
+        return folders.find((f) => f.id === id)?.name || t.links.unknownFolder;
+    };
 
     return (
         <div className="min-h-screen bg-gray-50 dark:bg-gray-900 pb-24 pt-4 px-4 transition-colors">
@@ -74,7 +77,7 @@ export function LinksHome() {
                                 : "border-gray-200 bg-white text-gray-600 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300"
                         )}
                     >
-                        {folder.name}
+                        {folder.id === "default" ? t.folders.general : folder.name}
                     </button>
                 ))}
             </div>

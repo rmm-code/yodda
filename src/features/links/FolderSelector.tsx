@@ -2,6 +2,8 @@ import * as React from "react";
 import { Plus } from "lucide-react";
 import { useLinkStore } from "./useLinkStore";
 import { cn } from "../../lib/utils";
+import { useLanguageStore } from "../../lib/useLanguageStore";
+import { getTranslations } from "../../lib/translations";
 
 interface FolderSelectorProps {
     selectedFolderId: string;
@@ -13,6 +15,8 @@ export function FolderSelector({ selectedFolderId, onSelect }: FolderSelectorPro
     const [isCreating, setIsCreating] = React.useState(false);
     const [newFolderName, setNewFolderName] = React.useState("");
     const inputRef = React.useRef<HTMLInputElement>(null);
+    const { language } = useLanguageStore();
+    const t = getTranslations(language);
 
     const handleCreate = () => {
         if (newFolderName.trim()) {
@@ -37,7 +41,7 @@ export function FolderSelector({ selectedFolderId, onSelect }: FolderSelectorPro
 
     return (
         <div className="space-y-2">
-            <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Folder</label>
+            <label className="text-sm font-medium text-gray-700 dark:text-gray-300">{t.folders.folderLabel}</label>
             <div className="flex space-x-2 overflow-x-auto pb-2 no-scrollbar">
                 {folders.map((folder) => (
                     <button
@@ -51,7 +55,7 @@ export function FolderSelector({ selectedFolderId, onSelect }: FolderSelectorPro
                                 : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
                         )}
                     >
-                        {folder.name}
+                        {folder.id === "default" ? t.folders.general : folder.name}
                     </button>
                 ))}
 
@@ -67,7 +71,7 @@ export function FolderSelector({ selectedFolderId, onSelect }: FolderSelectorPro
                                 if (!newFolderName) setIsCreating(false);
                             }}
                             className="w-20 bg-transparent text-sm text-blue-700 focus:outline-none dark:text-blue-400"
-                            placeholder="Name"
+                            placeholder={t.folders.namePlaceholder}
                         />
                         <button
                             type="button"
@@ -84,10 +88,11 @@ export function FolderSelector({ selectedFolderId, onSelect }: FolderSelectorPro
                         className="flex-shrink-0 flex items-center space-x-1 rounded-full border border-dashed border-gray-300 px-3 py-1.5 text-sm text-gray-500 hover:border-gray-400 hover:text-gray-600 dark:border-gray-600 dark:text-gray-400 dark:hover:border-gray-500 dark:hover:text-gray-300"
                     >
                         <Plus className="h-3 w-3" />
-                        <span>New</span>
+                        <span>{t.folders.new}</span>
                     </button>
                 )}
             </div>
         </div>
     );
 }
+

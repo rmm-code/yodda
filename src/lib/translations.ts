@@ -43,6 +43,9 @@ type TranslationSection = {
         namePlaceholder: string;
         save: string;
         create: string;
+        general: string;
+        new: string;
+        folderLabel: string;
     };
     subs: {
         title: string;
@@ -122,6 +125,9 @@ const translations: Record<Language, TranslationSection> = {
             namePlaceholder: "Folder Name",
             save: "Save Changes",
             create: "Create Folder",
+            general: "General",
+            new: "New",
+            folderLabel: "Folder",
         },
         subs: {
             title: "Subscriptions",
@@ -199,6 +205,9 @@ const translations: Record<Language, TranslationSection> = {
             namePlaceholder: "Название папки",
             save: "Сохранить",
             create: "Создать",
+            general: "Общее",
+            new: "Новая",
+            folderLabel: "Папка",
         },
         subs: {
             title: "Подписки",
@@ -245,7 +254,7 @@ const translations: Record<Language, TranslationSection> = {
         },
         tabs: {
             links: "Havolalar",
-            folders: "Jildlar",
+            folders: "Faylar",
             subs: "Obunalar",
             settings: "Sozlamalar",
         },
@@ -269,13 +278,16 @@ const translations: Record<Language, TranslationSection> = {
             urlError: "To'g'ri URL kiriting (masalan, https://example.com)",
         },
         folders: {
-            title: "Jildlar",
+            title: "Fayllar",
             linkCount: "ta havola",
             renameTitle: "Jildni nomlash",
             createTitle: "Yangi jild",
             namePlaceholder: "Jild nomi",
             save: "Saqlash",
             create: "Yaratish",
+            general: "Umumiy",
+            new: "Yangi",
+            folderLabel: "Jild",
         },
         subs: {
             title: "Obunalar",

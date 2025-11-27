@@ -57,7 +57,9 @@ export function FoldersHome() {
                                 <Folder className="h-5 w-5" />
                             </div>
                             <div>
-                                <h3 className="font-semibold text-gray-900 dark:text-white">{folder.name}</h3>
+                                <h3 className="font-semibold text-gray-900 dark:text-white">
+                                    {folder.id === "default" ? t.folders.general : folder.name}
+                                </h3>
                                 <p className="text-xs text-gray-500 dark:text-gray-400">{getLinkCount(folder.id)} {t.folders.linkCount}</p>
                             </div>
                         </div>
