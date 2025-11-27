@@ -10,13 +10,6 @@ export function SubsHome() {
     const { subscriptions, deleteSubscription } = useSubStore();
     const [isAddModalOpen, setIsAddModalOpen] = React.useState(false);
 
-    const totalMonthly = subscriptions.reduce((acc, sub) => {
-        let monthlyAmount = sub.amount;
-        if (sub.billing_cycle_type === "weekly") monthlyAmount = sub.amount * 4;
-        if (sub.billing_cycle_type === "yearly") monthlyAmount = sub.amount / 12;
-        return acc + monthlyAmount;
-    }, 0);
-
     const sortedSubs = [...subscriptions].sort((a, b) =>
         new Date(a.next_billing_date).getTime() - new Date(b.next_billing_date).getTime()
     );
