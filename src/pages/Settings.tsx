@@ -40,6 +40,7 @@ export function Settings() {
                         console.log('WebApp SDK not available');
                     }
                     
+                    // Try to get from WebApp SDK first
                     if (WebApp && WebApp.initDataUnsafe?.user) {
                         const user = WebApp.initDataUnsafe.user;
                         
@@ -55,18 +56,26 @@ export function Settings() {
                     }
                 }
                 
-                // Get photo from URL if available
+                // Get all user data from URL parameters (passed by bot)
                 const urlParams2 = new URLSearchParams(window.location.search);
                 const hashParams2 = new URLSearchParams(window.location.hash.split('?')[1] || '');
                 const phoneFromUrl2 = urlParams2.get('phone') || hashParams2.get('phone');
                 const photoFromUrl2 = urlParams2.get('photo') || hashParams2.get('photo');
+                const firstNameFromUrl = urlParams2.get('first_name') || hashParams2.get('first_name');
+                const lastNameFromUrl = urlParams2.get('last_name') || hashParams2.get('last_name');
+                const usernameFromUrl = urlParams2.get('username') || hashParams2.get('username');
                 
-                // If we have phone or photo from URL but no profile yet, update it
-                if (phoneFromUrl2 || photoFromUrl2) {
-                    updateProfile({
+                // If we have data from URL, use it (this is the primary source from bot)
+                if (phoneFromUrl2 || firstNameFromUrl || lastNameFromUrl || usernameFromUrl || photoFromUrl2) {
+                    setProfile({
+                        id: profile?.id,
+                        firstName: firstNameFromUrl || profile?.firstName,
+                        lastName: lastNameFromUrl || profile?.lastName,
+                        username: usernameFromUrl || profile?.username,
                         phoneNumber: phoneFromUrl2 || profile?.phoneNumber,
                         photoUrl: photoFromUrl2 || profile?.photoUrl,
                     });
+                    return;
                 }
                 
                 // If no profile at all and not in Telegram, use mock data for development
@@ -81,14 +90,20 @@ export function Settings() {
                 }
             } catch (error) {
                 console.error('Error loading user data:', error);
-                // Fallback: try to get phone and photo from URL
+                // Fallback: try to get all data from URL
                 const urlParams = new URLSearchParams(window.location.search);
                 const hashParams = new URLSearchParams(window.location.hash.split('?')[1] || '');
                 const phoneFromUrl = urlParams.get('phone') || hashParams.get('phone');
                 const photoFromUrl = urlParams.get('photo') || hashParams.get('photo');
+                const firstNameFromUrl = urlParams.get('first_name') || hashParams.get('first_name');
+                const lastNameFromUrl = urlParams.get('last_name') || hashParams.get('last_name');
+                const usernameFromUrl = urlParams.get('username') || hashParams.get('username');
                 
-                if ((phoneFromUrl || photoFromUrl) && !profile) {
+                if ((phoneFromUrl || firstNameFromUrl || lastNameFromUrl || usernameFromUrl || photoFromUrl) && !profile) {
                     setProfile({
+                        firstName: firstNameFromUrl || undefined,
+                        lastName: lastNameFromUrl || undefined,
+                        username: usernameFromUrl || undefined,
                         phoneNumber: phoneFromUrl || undefined,
                         photoUrl: photoFromUrl || undefined,
                     });
