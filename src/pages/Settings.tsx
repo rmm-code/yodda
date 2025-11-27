@@ -1,3 +1,4 @@
+import * as React from "react";
 import { useThemeStore } from "../lib/useThemeStore";
 import { cn } from "../lib/utils";
 import { Card } from "../components/ui/Card";
@@ -5,36 +6,72 @@ import { Moon, Shield, LogOut, Languages, Phone } from "lucide-react";
 import { useLanguageStore } from "../lib/useLanguageStore";
 import { getTranslations } from "../lib/translations";
 import { useUserStore } from "../lib/useUserStore";
-import { useEffect } from "react";
 
 export function Settings() {
     const { theme, toggleTheme } = useThemeStore();
     const { language, setLanguage } = useLanguageStore();
     const { profile, setProfile } = useUserStore();
     const t = getTranslations(language);
+    const [photoError, setPhotoError] = React.useState(false);
 
     // Load user data from Telegram WebApp
-    useEffect(() => {
-        if (typeof window !== 'undefined' && (window as any).Telegram?.WebApp) {
-            import('@twa-dev/sdk').then((module) => {
-                const WebApp = module.default;
-                const initData = WebApp.initDataUnsafe;
+    React.useEffect(() => {
+        const loadUserData = async () => {
+            try {
+                        // Get phone number and photo from URL parameter (passed by bot) - check both search and hash
+                        const urlParams = new URLSearchParams(window.location.search);
+                        const hashParams = new URLSearchParams(window.location.hash.split('?')[1] || '');
+                        const phoneFromUrl = urlParams.get('phone') || hashParams.get('phone');
+                        const photoFromUrl = urlParams.get('photo') || hashParams.get('photo');
                 
-                if (initData?.user) {
-                    const user = initData.user;
-                    // phone_number is not available in WebAppUser type, but might be in initData
-                    const phoneNumber = (initData as any).user?.phone_number || profile?.phoneNumber;
-                    setProfile({
-                        id: user.id,
-                        firstName: user.first_name,
-                        lastName: user.last_name,
-                        username: user.username,
-                        phoneNumber: phoneNumber,
-                    });
+                // Check if we're in Telegram
+                if (typeof window !== 'undefined') {
+                    // Try to load WebApp SDK
+                    let WebApp = null;
+                    try {
+                        const module = await import('@twa-dev/sdk');
+                        WebApp = module.default;
+                        
+                        // Wait a bit for WebApp to initialize if needed
+                        if (!WebApp.initDataUnsafe && (window as any).Telegram?.WebApp) {
+                            await new Promise(resolve => setTimeout(resolve, 200));
+                        }
+                    } catch (e) {
+                        console.log('WebApp SDK not available');
+                    }
+                    
+                    if (WebApp && WebApp.initDataUnsafe?.user) {
+                        const user = WebApp.initDataUnsafe.user;
+                        
+                        setProfile({
+                            id: user.id,
+                            firstName: user.first_name || undefined,
+                            lastName: user.last_name || undefined,
+                            username: user.username || undefined,
+                            phoneNumber: phoneFromUrl || profile?.phoneNumber || undefined,
+                            photoUrl: photoFromUrl || profile?.photoUrl || undefined,
+                        });
+                        return;
+                    }
                 }
-            }).catch(() => {
-                // Not in Telegram, use mock data for development
-                if (!profile) {
+                
+                // Get photo from URL if available
+                const urlParams2 = new URLSearchParams(window.location.search);
+                const hashParams2 = new URLSearchParams(window.location.hash.split('?')[1] || '');
+                const phoneFromUrl2 = urlParams2.get('phone') || hashParams2.get('phone');
+                const photoFromUrl2 = urlParams2.get('photo') || hashParams2.get('photo');
+                
+                // If we have phone or photo from URL but no profile yet, update it
+                if (phoneFromUrl2 || photoFromUrl2) {
+                    setProfile(prev => ({
+                        ...prev,
+                        phoneNumber: phoneFromUrl2 || prev?.phoneNumber,
+                        photoUrl: photoFromUrl2 || prev?.photoUrl,
+                    }));
+                }
+                
+                // If no profile at all and not in Telegram, use mock data for development
+                if (!profile && !phoneFromUrl) {
                     setProfile({
                         id: 123456789,
                         firstName: "John",
@@ -43,9 +80,30 @@ export function Settings() {
                         phoneNumber: "+998901234567",
                     });
                 }
-            });
-        }
-    }, [setProfile, profile]);
+            } catch (error) {
+                console.error('Error loading user data:', error);
+                // Fallback: try to get phone and photo from URL
+                const urlParams = new URLSearchParams(window.location.search);
+                const hashParams = new URLSearchParams(window.location.hash.split('?')[1] || '');
+                const phoneFromUrl = urlParams.get('phone') || hashParams.get('phone');
+                const photoFromUrl = urlParams.get('photo') || hashParams.get('photo');
+                
+                if ((phoneFromUrl || photoFromUrl) && !profile) {
+                    setProfile({
+                        phoneNumber: phoneFromUrl || undefined,
+                        photoUrl: photoFromUrl || undefined,
+                    });
+                }
+            }
+        };
+        
+        loadUserData();
+    }, [setProfile]);
+    
+    // Reset photo error when photo URL changes
+    React.useEffect(() => {
+        setPhotoError(false);
+    }, [profile?.photoUrl]);
 
     const languageOptions = [
         { code: "uz", label: "UZ" },
@@ -61,9 +119,18 @@ export function Settings() {
                 {/* Profile Card */}
                 <Card className="p-4 dark:bg-gray-800 dark:border-gray-700">
                     <div className="flex items-center space-x-3 mb-4">
-                        <div className="h-12 w-12 rounded-full bg-blue-600 flex items-center justify-center text-white text-lg font-semibold">
-                            {profile?.firstName?.charAt(0)?.toUpperCase() || "U"}
-                        </div>
+                        {profile?.photoUrl && !photoError ? (
+                            <img
+                                src={profile.photoUrl}
+                                alt={profile.firstName || "User"}
+                                className="h-12 w-12 rounded-full object-cover border-2 border-blue-600"
+                                onError={() => setPhotoError(true)}
+                            />
+                        ) : (
+                            <div className="h-12 w-12 rounded-full bg-blue-600 flex items-center justify-center text-white text-lg font-semibold">
+                                {profile?.firstName?.charAt(0)?.toUpperCase() || profile?.username?.charAt(0)?.toUpperCase() || "U"}
+                            </div>
+                        )}
                         <div className="flex-1">
                             <h3 className="font-semibold text-gray-900 dark:text-white">
                                 {profile?.firstName && profile?.lastName

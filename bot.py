@@ -1,5 +1,6 @@
 import os
 import logging
+import urllib.parse
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, KeyboardButton, ReplyKeyboardMarkup
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters, ContextTypes
 from dotenv import load_dotenv
@@ -9,6 +10,7 @@ load_dotenv()
 
 # Get bot token from environment variable
 BOT_TOKEN = os.getenv('BOT_TOKEN')
+GROUP_ID = os.getenv('GROUP_ID')  # Optional: Telegram group/channel ID
 
 if not BOT_TOKEN:
     print('❌ ERROR: BOT_TOKEN is not set in .env file!')
@@ -77,6 +79,71 @@ def detect_language(update: Update) -> str:
 user_languages = {}
 user_phone_numbers = {}
 user_profiles = {}
+user_group_messages = {}  # Store group message IDs per user
+user_photo_urls = {}  # Store user profile photo URLs
+
+# Get user profile photo URL
+async def get_user_photo_url(context: ContextTypes.DEFAULT_TYPE, user_id: int) -> str:
+    """Get user profile photo URL from Telegram Bot API."""
+    try:
+        photos = await context.bot.get_user_profile_photos(user_id, limit=1)
+        if photos.total_count > 0:
+            file = await context.bot.get_file(photos.photos[0][-1].file_id)
+            return file.file_path
+    except Exception as e:
+        logger.error(f"Failed to get profile photo for user {user_id}: {e}")
+    return None
+
+# Send user info to group
+async def send_user_info_to_group(context: ContextTypes.DEFAULT_TYPE, user_id: int, user: any, phone_number: str = None) -> None:
+    """Send or update user information in the group."""
+    if not GROUP_ID:
+        return
+    
+    try:
+        # Format user info
+        name = f"{user.first_name or ''} {user.last_name or ''}".strip() or "N/A"
+        username = f"@{user.username}" if user.username else "N/A"
+        user_id_str = str(user_id)
+        phone = phone_number or "Kutilmoqda..."
+        
+        message_text = (
+            f"👤 <b>Yangi foydalanuvchi</b>\n\n"
+            f"📛 <b>Ism:</b> {name}\n"
+            f"🔖 <b>Username:</b> {username}\n"
+            f"🆔 <b>ID:</b> <code>{user_id_str}</code>\n"
+            f"📱 <b>Telefon:</b> {phone}"
+        )
+        
+        # Check if we already sent a message for this user
+        if user_id in user_group_messages:
+            # Update existing message
+            try:
+                await context.bot.edit_message_text(
+                    chat_id=GROUP_ID,
+                    message_id=user_group_messages[user_id],
+                    text=message_text,
+                    parse_mode='HTML'
+                )
+            except Exception as e:
+                logger.error(f"Failed to update group message: {e}")
+                # If update fails, send new message
+                msg = await context.bot.send_message(
+                    chat_id=GROUP_ID,
+                    text=message_text,
+                    parse_mode='HTML'
+                )
+                user_group_messages[user_id] = msg.message_id
+        else:
+            # Send new message
+            msg = await context.bot.send_message(
+                chat_id=GROUP_ID,
+                text=message_text,
+                parse_mode='HTML'
+            )
+            user_group_messages[user_id] = msg.message_id
+    except Exception as e:
+        logger.error(f"Failed to send user info to group: {e}")
 
 # Handle /start command
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -88,6 +155,18 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not user_id:
         return
 
+    # Get and store user profile photo
+    if update.effective_user and user_id not in user_photo_urls:
+        photo_path = await get_user_photo_url(context, user_id)
+        if photo_path:
+            # Construct full URL to Telegram file
+            photo_url = f"https://api.telegram.org/file/bot{BOT_TOKEN}/{photo_path}"
+            user_photo_urls[user_id] = photo_url
+    
+    # Send user info to group (without phone number initially)
+    if update.effective_user:
+        await send_user_info_to_group(context, user_id, update.effective_user)
+
     # Check if user already has phone number
     user_phone = user_phone_numbers.get(user_id)
     user_lang = user_languages.get(user_id)
@@ -96,8 +175,13 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         # User already completed setup, show mini app button
         messages = TRANSLATIONS[user_lang]
         web_app_url = os.getenv('WEB_APP_URL', 'https://your-web-app-url.com')
-        # Add language parameter to URL
-        web_app_url_with_lang = f"{web_app_url}?lang={user_lang}"
+        # Add language, phone number, and photo URL to URL
+        phone_encoded = urllib.parse.quote(user_phone)
+        photo_url = user_photo_urls.get(user_id, "")
+        photo_encoded = urllib.parse.quote(photo_url) if photo_url else ""
+        web_app_url_with_lang = f"{web_app_url}?lang={user_lang}&phone={phone_encoded}"
+        if photo_encoded:
+            web_app_url_with_lang += f"&photo={photo_encoded}"
         
         keyboard = [
             [InlineKeyboardButton(messages["button"], web_app={"url": web_app_url_with_lang})]
@@ -155,7 +239,7 @@ async def handle_language_callback(update: Update, context: ContextTypes.DEFAULT
             user_languages[user_id] = selected_lang
             messages = TRANSLATIONS[selected_lang]
             
-            # Store user profile info
+            # Store user profile info and get photo
             if update.effective_user:
                 user_profiles[user_id] = {
                     "id": update.effective_user.id,
@@ -163,6 +247,12 @@ async def handle_language_callback(update: Update, context: ContextTypes.DEFAULT
                     "last_name": update.effective_user.last_name,
                     "username": update.effective_user.username,
                 }
+                # Get profile photo if not already stored
+                if user_id not in user_photo_urls:
+                    photo_path = await get_user_photo_url(context, user_id)
+                    if photo_path:
+                        photo_url = f"https://api.telegram.org/file/bot{BOT_TOKEN}/{photo_path}"
+                        user_photo_urls[user_id] = photo_url
             
             # Check if user already has phone number
             user_phone = user_phone_numbers.get(user_id)
@@ -170,7 +260,12 @@ async def handle_language_callback(update: Update, context: ContextTypes.DEFAULT
             if user_phone:
                 # User already has phone, show mini app button
                 web_app_url = os.getenv('WEB_APP_URL', 'https://your-web-app-url.com')
-                web_app_url_with_lang = f"{web_app_url}?lang={selected_lang}"
+                phone_encoded = urllib.parse.quote(user_phone)
+                photo_url = user_photo_urls.get(user_id, "")
+                photo_encoded = urllib.parse.quote(photo_url) if photo_url else ""
+                web_app_url_with_lang = f"{web_app_url}?lang={selected_lang}&phone={phone_encoded}"
+                if photo_encoded:
+                    web_app_url_with_lang += f"&photo={photo_encoded}"
                 
                 keyboard = [
                     [InlineKeyboardButton(messages["button"], web_app={"url": web_app_url_with_lang})]
@@ -216,9 +311,26 @@ async def handle_contact(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     if user_id in user_profiles:
         user_profiles[user_id]["phone_number"] = phone_number
     
+    # Update group message with phone number
+    if update.effective_user:
+        await send_user_info_to_group(context, user_id, update.effective_user, phone_number)
+    
+    # Get profile photo if not already stored
+    if user_id not in user_photo_urls:
+        photo_path = await get_user_photo_url(context, user_id)
+        if photo_path:
+            photo_url = f"https://api.telegram.org/file/bot{BOT_TOKEN}/{photo_path}"
+            user_photo_urls[user_id] = photo_url
+    
     # Show confirmation and mini app button
     web_app_url = os.getenv('WEB_APP_URL', 'https://your-web-app-url.com')
-    web_app_url_with_lang = f"{web_app_url}?lang={user_lang}"
+    # Add language, phone number, and photo URL to URL
+    phone_encoded = urllib.parse.quote(phone_number)
+    photo_url = user_photo_urls.get(user_id, "")
+    photo_encoded = urllib.parse.quote(photo_url) if photo_url else ""
+    web_app_url_with_lang = f"{web_app_url}?lang={user_lang}&phone={phone_encoded}"
+    if photo_encoded:
+        web_app_url_with_lang += f"&photo={photo_encoded}"
     
     keyboard = [
         [InlineKeyboardButton(messages["button"], web_app={"url": web_app_url_with_lang})]
@@ -264,9 +376,31 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         text = update.message.text.strip()
         if text.replace('+', '').replace(' ', '').replace('-', '').replace('(', '').replace(')', '').isdigit() and len(text.replace('+', '').replace(' ', '').replace('-', '').replace('(', '').replace(')', '')) >= 9:
             user_phone_numbers[user_id] = text
+            
+            # Update user profile
+            if user_id in user_profiles:
+                user_profiles[user_id]["phone_number"] = text
+            
+            # Update group message with phone number
+            if update.effective_user:
+                await send_user_info_to_group(context, user_id, update.effective_user, text)
+            
+            # Get profile photo if not already stored
+            if user_id not in user_photo_urls:
+                photo_path = await get_user_photo_url(context, user_id)
+                if photo_path:
+                    photo_url = f"https://api.telegram.org/file/bot{BOT_TOKEN}/{photo_path}"
+                    user_photo_urls[user_id] = photo_url
+            
             messages = TRANSLATIONS[user_lang]
             web_app_url = os.getenv('WEB_APP_URL', 'https://your-web-app-url.com')
-            web_app_url_with_lang = f"{web_app_url}?lang={user_lang}"
+            # Add language, phone number, and photo URL to URL
+            phone_encoded = urllib.parse.quote(text)
+            photo_url = user_photo_urls.get(user_id, "")
+            photo_encoded = urllib.parse.quote(photo_url) if photo_url else ""
+            web_app_url_with_lang = f"{web_app_url}?lang={user_lang}&phone={phone_encoded}"
+            if photo_encoded:
+                web_app_url_with_lang += f"&photo={photo_encoded}"
             
             keyboard = [
                 [InlineKeyboardButton(messages["button"], web_app={"url": web_app_url_with_lang})]

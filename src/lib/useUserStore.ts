@@ -7,6 +7,7 @@ export interface UserProfile {
     lastName?: string;
     username?: string;
     phoneNumber?: string;
+    photoUrl?: string;
 }
 
 interface UserState {
