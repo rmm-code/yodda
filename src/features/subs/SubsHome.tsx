@@ -17,8 +17,6 @@ export function SubsHome() {
         return acc + monthlyAmount;
     }, 0);
 
-    const totalYearly = totalMonthly * 12;
-
     const sortedSubs = [...subscriptions].sort((a, b) =>
         new Date(a.next_billing_date).getTime() - new Date(b.next_billing_date).getTime()
     );

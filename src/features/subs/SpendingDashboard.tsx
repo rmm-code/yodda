@@ -1,5 +1,5 @@
 import * as React from "react";
-import { useSubStore, type Subscription } from "./useSubStore";
+import { useSubStore } from "./useSubStore";
 import { Card } from "../../components/ui/Card";
 import { TrendingUp, Calendar, DollarSign, PieChart } from "lucide-react";
 import { cn } from "../../lib/utils";

@@ -5,6 +5,21 @@ import react from '@vitejs/plugin-react'
 export default defineConfig({
   plugins: [react()],
   server: {
-    allowedHosts: ['tender-papers-rush.loca.lt', 'sweet-poems-sing.loca.lt', 'https://proud-turkeys-clean.loca.lt'],
+    // Development server config
+    host: true,
+    port: 5173,
+  },
+  build: {
+    // Production build optimizations
+    outDir: 'dist',
+    sourcemap: false,
+    minify: 'esbuild',
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          vendor: ['react', 'react-dom', 'react-router-dom'],
+        },
+      },
+    },
   },
 })

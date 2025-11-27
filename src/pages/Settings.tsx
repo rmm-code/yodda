@@ -1,7 +1,7 @@
 import { useThemeStore } from "../lib/useThemeStore";
 import { cn } from "../lib/utils";
 import { Card } from "../components/ui/Card";
-import { Moon, Shield, LogOut, Languages, User, Phone } from "lucide-react";
+import { Moon, Shield, LogOut, Languages, Phone } from "lucide-react";
 import { useLanguageStore } from "../lib/useLanguageStore";
 import { getTranslations } from "../lib/translations";
 import { useUserStore } from "../lib/useUserStore";
@@ -22,12 +22,14 @@ export function Settings() {
                 
                 if (initData?.user) {
                     const user = initData.user;
+                    // phone_number is not available in WebAppUser type, but might be in initData
+                    const phoneNumber = (initData as any).user?.phone_number || profile?.phoneNumber;
                     setProfile({
                         id: user.id,
                         firstName: user.first_name,
                         lastName: user.last_name,
                         username: user.username,
-                        phoneNumber: user.phone_number || profile?.phoneNumber,
+                        phoneNumber: phoneNumber,
                     });
                 }
             }).catch(() => {
