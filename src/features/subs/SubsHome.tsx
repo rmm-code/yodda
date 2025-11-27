@@ -3,6 +3,7 @@ import { Plus, Trash2 } from "lucide-react";
 import { useSubStore } from "./useSubStore";
 import { AddSubForm } from "./AddSubForm";
 import { Card } from "../../components/ui/Card";
+import { SpendingDashboard } from "./SpendingDashboard";
 
 
 export function SubsHome() {
@@ -40,19 +41,8 @@ export function SubsHome() {
                 </button>
             </div>
 
-            {/* Summary Card */}
-            <Card className="mb-6 bg-gradient-to-br from-blue-600 to-blue-700 text-white border-none dark:from-blue-800 dark:to-blue-900">
-                <div className="flex justify-between items-start mb-4">
-                    <div>
-                        <p className="text-blue-100 text-sm font-medium">Total Monthly</p>
-                        <h2 className="text-3xl font-bold">${totalMonthly.toFixed(2)}</h2>
-                    </div>
-                    <div className="text-right">
-                        <p className="text-blue-100 text-xs">Yearly</p>
-                        <p className="font-semibold">${totalYearly.toFixed(2)}</p>
-                    </div>
-                </div>
-            </Card>
+            {/* Spending Dashboard */}
+            <SpendingDashboard />
 
             {/* List */}
             <div className="space-y-3">

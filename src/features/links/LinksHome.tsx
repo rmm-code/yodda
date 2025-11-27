@@ -86,22 +86,47 @@ export function LinksHome() {
                     </div>
                 ) : (
                     filteredLinks.map((link) => (
-                        <Card key={link.id} className="flex flex-col space-y-2">
+                        <Card key={link.id} className="flex flex-col space-y-2 overflow-hidden">
+                            {link.thumbnail && (
+                                <div className="w-full h-32 -mx-2 -mt-2 mb-2 bg-gray-100 dark:bg-gray-700 relative overflow-hidden">
+                                    <img
+                                        src={link.thumbnail}
+                                        alt={link.title}
+                                        className="w-full h-full object-cover"
+                                        onError={(e) => {
+                                            (e.target as HTMLImageElement).style.display = 'none';
+                                        }}
+                                    />
+                                </div>
+                            )}
                             <div className="flex items-start justify-between">
-                                <div className="space-y-1">
-                                    <h3 className="font-semibold text-gray-900 dark:text-white line-clamp-1">{link.title}</h3>
+                                <div className="space-y-1 flex-1 min-w-0">
+                                    <h3 className="font-semibold text-gray-900 dark:text-white line-clamp-2">{link.title}</h3>
+                                    {link.description && (
+                                        <p className="text-xs text-gray-600 dark:text-gray-400 line-clamp-2">
+                                            {link.description}
+                                        </p>
+                                    )}
                                     <a
                                         href={link.url}
                                         target="_blank"
                                         rel="noopener noreferrer"
                                         className="flex items-center text-xs text-gray-500 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400"
                                     >
-                                        <ExternalLink className="mr-1 h-3 w-3" />
-                                        <span className="line-clamp-1">{new URL(link.url).hostname}</span>
+                                        <ExternalLink className="mr-1 h-3 w-3 flex-shrink-0" />
+                                        <span className="line-clamp-1">
+                                            {link.site_name || (() => {
+                                                try {
+                                                    return new URL(link.url).hostname;
+                                                } catch {
+                                                    return link.url.length > 30 ? link.url.substring(0, 30) + '...' : link.url;
+                                                }
+                                            })()}
+                                        </span>
                                     </a>
                                 </div>
                                 {link.is_favorite && (
-                                    <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
+                                    <Star className="h-4 w-4 fill-yellow-400 text-yellow-400 flex-shrink-0 ml-2" />
                                 )}
                             </div>
 

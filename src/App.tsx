@@ -7,9 +7,22 @@ import { FoldersHome } from "./features/links/FoldersHome";
 import { SubsHome } from "./features/subs/SubsHome";
 import { Settings } from "./pages/Settings";
 import { useThemeStore } from "./lib/useThemeStore";
+import { useLanguageStore, type Language } from "./lib/useLanguageStore";
+import { getTranslations } from "./lib/translations";
 
 function App() {
   const { theme } = useThemeStore();
+  const { language, setLanguage } = useLanguageStore();
+  const t = getTranslations(language);
+
+  // Check URL parameter for language on mount
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const langParam = urlParams.get('lang') as Language | null;
+    if (langParam && (langParam === 'uz' || langParam === 'ru' || langParam === 'en')) {
+      setLanguage(langParam);
+    }
+  }, [setLanguage]);
 
   useEffect(() => {
     if (theme === "dark") {
@@ -20,10 +33,10 @@ function App() {
   }, [theme]);
 
   const navItems = [
-    { label: "Links", icon: Link, path: "/" },
-    { label: "Folders", icon: Folder, path: "/folders" },
-    { label: "Subs", icon: CreditCard, path: "/subs" },
-    { label: "Settings", icon: SettingsIcon, path: "/settings" },
+    { label: t.tabs.links, icon: Link, path: "/" },
+    { label: t.tabs.folders, icon: Folder, path: "/folders" },
+    { label: t.tabs.subs, icon: CreditCard, path: "/subs" },
+    { label: t.tabs.settings, icon: SettingsIcon, path: "/settings" },
   ];
 
   return (

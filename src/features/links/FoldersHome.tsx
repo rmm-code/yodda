@@ -1,14 +1,16 @@
 import * as React from "react";
 import { useLinkStore } from "./useLinkStore";
 import { Card } from "../../components/ui/Card";
-import { Folder, Trash2, Edit2 } from "lucide-react";
+import { Folder, Trash2, Edit2, Plus } from "lucide-react";
 import { Input } from "../../components/ui/Input";
 import { Button } from "../../components/ui/Button";
 import { Modal } from "../../components/ui/Modal";
 
 export function FoldersHome() {
-    const { folders, links, deleteFolder, updateFolder } = useLinkStore();
+    const { folders, links, deleteFolder, updateFolder, addFolder } = useLinkStore();
     const [editingFolder, setEditingFolder] = React.useState<{ id: string; name: string } | null>(null);
+    const [isCreatingFolder, setIsCreatingFolder] = React.useState(false);
+    const [newFolderName, setNewFolderName] = React.useState("");
 
     const getLinkCount = (folderId: string) => {
         return links.filter((l) => l.folder_id === folderId).length;
@@ -22,9 +24,26 @@ export function FoldersHome() {
         }
     };
 
+    const handleCreateFolder = (e: React.FormEvent) => {
+        e.preventDefault();
+        if (newFolderName.trim()) {
+            addFolder(newFolderName.trim());
+            setNewFolderName("");
+            setIsCreatingFolder(false);
+        }
+    };
+
     return (
         <div className="min-h-screen bg-gray-50 dark:bg-gray-900 pb-24 pt-4 px-4 transition-colors">
-            <h1 className="mb-6 text-2xl font-bold text-gray-900 dark:text-white">Folders</h1>
+            <div className="mb-6 flex items-center justify-between">
+                <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Folders</h1>
+                <button
+                    onClick={() => setIsCreatingFolder(true)}
+                    className="rounded-full bg-blue-600 p-2 text-white shadow-lg transition-transform hover:scale-105 active:scale-95 hover:bg-blue-700"
+                >
+                    <Plus className="h-6 w-6" />
+                </button>
+            </div>
 
             <div className="space-y-3">
                 {folders.map((folder) => (
@@ -74,6 +93,28 @@ export function FoldersHome() {
                     />
                     <Button type="submit" className="w-full">
                         Save Changes
+                    </Button>
+                </form>
+            </Modal>
+
+            <Modal
+                isOpen={isCreatingFolder}
+                onClose={() => {
+                    setIsCreatingFolder(false);
+                    setNewFolderName("");
+                }}
+                title="Create New Folder"
+            >
+                <form onSubmit={handleCreateFolder} className="space-y-4">
+                    <Input
+                        value={newFolderName}
+                        onChange={(e) => setNewFolderName(e.target.value)}
+                        placeholder="Folder Name"
+                        required
+                        autoFocus
+                    />
+                    <Button type="submit" className="w-full">
+                        Create Folder
                     </Button>
                 </form>
             </Modal>

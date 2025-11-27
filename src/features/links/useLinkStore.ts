@@ -16,6 +16,9 @@ export interface Link {
     title: string;
     note?: string;
     is_favorite: boolean;
+    thumbnail?: string;
+    description?: string;
+    site_name?: string;
     created_at: string;
 }
 
