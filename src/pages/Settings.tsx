@@ -10,7 +10,7 @@ import { useUserStore } from "../lib/useUserStore";
 export function Settings() {
     const { theme, toggleTheme } = useThemeStore();
     const { language, setLanguage } = useLanguageStore();
-    const { profile, setProfile } = useUserStore();
+    const { profile, setProfile, updateProfile } = useUserStore();
     const t = getTranslations(language);
     const [photoError, setPhotoError] = React.useState(false);
 
@@ -63,11 +63,10 @@ export function Settings() {
                 
                 // If we have phone or photo from URL but no profile yet, update it
                 if (phoneFromUrl2 || photoFromUrl2) {
-                    setProfile(prev => ({
-                        ...prev,
-                        phoneNumber: phoneFromUrl2 || prev?.phoneNumber,
-                        photoUrl: photoFromUrl2 || prev?.photoUrl,
-                    }));
+                    updateProfile({
+                        phoneNumber: phoneFromUrl2 || profile?.phoneNumber,
+                        photoUrl: photoFromUrl2 || profile?.photoUrl,
+                    });
                 }
                 
                 // If no profile at all and not in Telegram, use mock data for development
