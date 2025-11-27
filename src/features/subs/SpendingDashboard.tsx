@@ -3,9 +3,13 @@ import { useSubStore } from "./useSubStore";
 import { Card } from "../../components/ui/Card";
 import { TrendingUp, Calendar, DollarSign, PieChart } from "lucide-react";
 import { cn } from "../../lib/utils";
+import { useLanguageStore } from "../../lib/useLanguageStore";
+import { getTranslations } from "../../lib/translations";
 
 export function SpendingDashboard() {
     const { subscriptions } = useSubStore();
+    const { language } = useLanguageStore();
+    const t = getTranslations(language);
 
     // Calculate totals
     const totals = React.useMemo(() => {
@@ -27,7 +31,7 @@ export function SpendingDashboard() {
     // Calculate by category
     const categorySpending = React.useMemo(() => {
         const categoryMap: Record<string, number> = {};
-        
+
         subscriptions.forEach((sub) => {
             let monthlyAmount = sub.amount;
             if (sub.billing_cycle_type === "weekly") {
@@ -35,7 +39,7 @@ export function SpendingDashboard() {
             } else if (sub.billing_cycle_type === "yearly") {
                 monthlyAmount = sub.amount / 12;
             }
-            
+
             categoryMap[sub.category] = (categoryMap[sub.category] || 0) + monthlyAmount;
         });
 
@@ -55,7 +59,7 @@ export function SpendingDashboard() {
                 const billingDate = new Date(sub.next_billing_date);
                 return billingDate >= today && billingDate <= nextWeek;
             })
-            .sort((a, b) => 
+            .sort((a, b) =>
                 new Date(a.next_billing_date).getTime() - new Date(b.next_billing_date).getTime()
             )
             .slice(0, 5);
@@ -71,7 +75,7 @@ export function SpendingDashboard() {
 
     const formatDate = (dateStr: string) => {
         const date = new Date(dateStr);
-        return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+        return date.toLocaleDateString(language === 'en' ? "en-US" : language === 'ru' ? "ru-RU" : "uz-UZ", { month: "short", day: "numeric" });
     };
 
     const getCategoryColor = (category: string) => {
@@ -99,7 +103,7 @@ export function SpendingDashboard() {
                 <Card className="bg-gradient-to-br from-blue-600 to-blue-700 text-white border-none dark:from-blue-800 dark:to-blue-900">
                     <div className="flex items-center justify-between">
                         <div>
-                            <p className="text-blue-100 text-xs font-medium mb-1">Monthly</p>
+                            <p className="text-blue-100 text-xs font-medium mb-1">{t.subs.monthly}</p>
                             <h3 className="text-2xl font-bold">{formatCurrency(totals.monthly)}</h3>
                         </div>
                         <DollarSign className="h-8 w-8 text-blue-200" />
@@ -109,7 +113,7 @@ export function SpendingDashboard() {
                 <Card className="bg-gradient-to-br from-green-600 to-green-700 text-white border-none dark:from-green-800 dark:to-green-900">
                     <div className="flex items-center justify-between">
                         <div>
-                            <p className="text-green-100 text-xs font-medium mb-1">Yearly</p>
+                            <p className="text-green-100 text-xs font-medium mb-1">{t.subs.yearly}</p>
                             <h3 className="text-2xl font-bold">{formatCurrency(totals.yearly)}</h3>
                         </div>
                         <TrendingUp className="h-8 w-8 text-green-200" />
@@ -122,7 +126,7 @@ export function SpendingDashboard() {
                 <Card className="p-4">
                     <div className="flex items-center space-x-2 mb-4">
                         <PieChart className="h-5 w-5 text-gray-600 dark:text-gray-400" />
-                        <h3 className="font-semibold text-gray-900 dark:text-white">By Category</h3>
+                        <h3 className="font-semibold text-gray-900 dark:text-white">{t.subs.byCategory}</h3>
                     </div>
                     <div className="space-y-3">
                         {categorySpending.map(({ category, amount }) => (
@@ -155,7 +159,7 @@ export function SpendingDashboard() {
                 <Card className="p-4">
                     <div className="flex items-center space-x-2 mb-4">
                         <Calendar className="h-5 w-5 text-gray-600 dark:text-gray-400" />
-                        <h3 className="font-semibold text-gray-900 dark:text-white">Upcoming (Next 7 Days)</h3>
+                        <h3 className="font-semibold text-gray-900 dark:text-white">{t.subs.upcoming}</h3>
                     </div>
                     <div className="space-y-2">
                         {upcomingRenewals.map((sub) => (
@@ -182,4 +186,5 @@ export function SpendingDashboard() {
         </div>
     );
 }
+
 

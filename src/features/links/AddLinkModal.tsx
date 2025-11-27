@@ -7,6 +7,8 @@ import { FolderSelector } from "./FolderSelector";
 import { Star, Loader2, ExternalLink } from "lucide-react";
 import { cn } from "../../lib/utils";
 import { fetchLinkPreview, type LinkPreview } from "../../lib/linkPreview";
+import { useLanguageStore } from "../../lib/useLanguageStore";
+import { getTranslations } from "../../lib/translations";
 
 interface AddLinkModalProps {
     isOpen: boolean;
@@ -15,6 +17,8 @@ interface AddLinkModalProps {
 
 export function AddLinkModal({ isOpen, onClose }: AddLinkModalProps) {
     const { addLink, folders } = useLinkStore();
+    const { language } = useLanguageStore();
+    const t = getTranslations(language);
 
     const [url, setUrl] = React.useState("");
     const [title, setTitle] = React.useState("");
@@ -92,7 +96,7 @@ export function AddLinkModal({ isOpen, onClose }: AddLinkModalProps) {
 
         // Validate URL
         if (!validateUrl(url)) {
-            setUrlError("Please enter a valid URL (e.g., https://example.com)");
+            setUrlError(t.links.urlError);
             return;
         }
 
@@ -125,24 +129,24 @@ export function AddLinkModal({ isOpen, onClose }: AddLinkModalProps) {
     };
 
     return (
-        <Modal isOpen={isOpen} onClose={onClose} title="Save Link">
+        <Modal isOpen={isOpen} onClose={onClose} title={t.links.addLink}>
             <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="space-y-1">
                     <div className="flex space-x-2">
                         <Input
-                            placeholder="https://example.com"
+                            placeholder={t.links.urlPlaceholder}
                             value={url}
                             onChange={(e) => {
                                 setUrl(e.target.value);
                                 if (urlError) setUrlError("");
                             }}
-                            label="URL"
+                            label={t.links.urlLabel}
                             required
                             className="flex-1"
                         />
                         <div className="pt-6">
                             <Button type="button" variant="secondary" size="sm" onClick={handlePaste}>
-                                Paste
+                                {t.links.paste}
                             </Button>
                         </div>
                     </div>
@@ -152,10 +156,10 @@ export function AddLinkModal({ isOpen, onClose }: AddLinkModalProps) {
                 </div>
 
                 <Input
-                    placeholder="Link Title"
+                    placeholder={t.links.titlePlaceholder}
                     value={title}
                     onChange={(e) => setTitle(e.target.value)}
-                    label="Title"
+                    label={t.links.titleLabel}
                     required
                 />
 
@@ -200,14 +204,14 @@ export function AddLinkModal({ isOpen, onClose }: AddLinkModalProps) {
                 {isLoadingPreview && !preview && (
                     <div className="rounded-xl border border-gray-200 dark:border-gray-700 p-4 bg-white dark:bg-gray-800 flex items-center justify-center">
                         <Loader2 className="h-5 w-5 animate-spin text-blue-600" />
-                        <span className="ml-2 text-sm text-gray-600 dark:text-gray-400">Loading preview...</span>
+                        <span className="ml-2 text-sm text-gray-600 dark:text-gray-400">{t.links.loadingPreview}</span>
                     </div>
                 )}
 
                 <FolderSelector selectedFolderId={folderId} onSelect={setFolderId} />
 
                 <div className="space-y-1">
-                    <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Note (Optional)</label>
+                    <label className="text-sm font-medium text-gray-700 dark:text-gray-300">{t.links.noteLabel}</label>
                     <textarea
                         className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-800 dark:text-white dark:placeholder:text-gray-500"
                         rows={3}
@@ -228,14 +232,15 @@ export function AddLinkModal({ isOpen, onClose }: AddLinkModalProps) {
                         )}
                     >
                         <Star className={cn("h-4 w-4", isFavorite && "fill-current")} />
-                        <span>Favorite</span>
+                        <span>{t.links.favorite}</span>
                     </button>
                 </div>
 
                 <Button type="submit" className="w-full">
-                    Save Link
+                    {t.links.save}
                 </Button>
             </form>
         </Modal>
     );
 }
+

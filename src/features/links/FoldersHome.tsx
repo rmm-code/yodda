@@ -5,12 +5,16 @@ import { Folder, Trash2, Edit2, Plus } from "lucide-react";
 import { Input } from "../../components/ui/Input";
 import { Button } from "../../components/ui/Button";
 import { Modal } from "../../components/ui/Modal";
+import { useLanguageStore } from "../../lib/useLanguageStore";
+import { getTranslations } from "../../lib/translations";
 
 export function FoldersHome() {
     const { folders, links, deleteFolder, updateFolder, addFolder } = useLinkStore();
     const [editingFolder, setEditingFolder] = React.useState<{ id: string; name: string } | null>(null);
     const [isCreatingFolder, setIsCreatingFolder] = React.useState(false);
     const [newFolderName, setNewFolderName] = React.useState("");
+    const { language } = useLanguageStore();
+    const t = getTranslations(language);
 
     const getLinkCount = (folderId: string) => {
         return links.filter((l) => l.folder_id === folderId).length;
@@ -36,7 +40,7 @@ export function FoldersHome() {
     return (
         <div className="min-h-screen bg-gray-50 dark:bg-gray-900 pb-24 pt-4 px-4 transition-colors">
             <div className="mb-6 flex items-center justify-between">
-                <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Folders</h1>
+                <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{t.folders.title}</h1>
                 <button
                     onClick={() => setIsCreatingFolder(true)}
                     className="rounded-full bg-blue-600 p-2 text-white shadow-lg transition-transform hover:scale-105 active:scale-95 hover:bg-blue-700"
@@ -54,7 +58,7 @@ export function FoldersHome() {
                             </div>
                             <div>
                                 <h3 className="font-semibold text-gray-900 dark:text-white">{folder.name}</h3>
-                                <p className="text-xs text-gray-500 dark:text-gray-400">{getLinkCount(folder.id)} links</p>
+                                <p className="text-xs text-gray-500 dark:text-gray-400">{getLinkCount(folder.id)} {t.folders.linkCount}</p>
                             </div>
                         </div>
                         <div className="flex items-center space-x-2">
@@ -80,7 +84,7 @@ export function FoldersHome() {
             <Modal
                 isOpen={!!editingFolder}
                 onClose={() => setEditingFolder(null)}
-                title="Rename Folder"
+                title={t.folders.renameTitle}
             >
                 <form onSubmit={handleUpdate} className="space-y-4">
                     <Input
@@ -88,11 +92,11 @@ export function FoldersHome() {
                         onChange={(e) =>
                             setEditingFolder((prev) => (prev ? { ...prev, name: e.target.value } : null))
                         }
-                        placeholder="Folder Name"
+                        placeholder={t.folders.namePlaceholder}
                         required
                     />
                     <Button type="submit" className="w-full">
-                        Save Changes
+                        {t.folders.save}
                     </Button>
                 </form>
             </Modal>
@@ -103,21 +107,22 @@ export function FoldersHome() {
                     setIsCreatingFolder(false);
                     setNewFolderName("");
                 }}
-                title="Create New Folder"
+                title={t.folders.createTitle}
             >
                 <form onSubmit={handleCreateFolder} className="space-y-4">
                     <Input
                         value={newFolderName}
                         onChange={(e) => setNewFolderName(e.target.value)}
-                        placeholder="Folder Name"
+                        placeholder={t.folders.namePlaceholder}
                         required
                         autoFocus
                     />
                     <Button type="submit" className="w-full">
-                        Create Folder
+                        {t.folders.create}
                     </Button>
                 </form>
             </Modal>
         </div>
     );
 }
+

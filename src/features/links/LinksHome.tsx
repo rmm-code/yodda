@@ -5,12 +5,16 @@ import { AddLinkModal } from "./AddLinkModal";
 import { Card } from "../../components/ui/Card";
 import { Input } from "../../components/ui/Input";
 import { cn } from "../../lib/utils";
+import { useLanguageStore } from "../../lib/useLanguageStore";
+import { getTranslations } from "../../lib/translations";
 
 export function LinksHome() {
     const { links, folders, deleteLink } = useLinkStore();
     const [isAddModalOpen, setIsAddModalOpen] = React.useState(false);
     const [searchQuery, setSearchQuery] = React.useState("");
     const [selectedFolderId, setSelectedFolderId] = React.useState<string | null>(null);
+    const { language } = useLanguageStore();
+    const t = getTranslations(language);
 
     const filteredLinks = links.filter((link) => {
         const matchesSearch =
@@ -20,13 +24,13 @@ export function LinksHome() {
         return matchesSearch && matchesFolder;
     });
 
-    const getFolderName = (id: string) => folders.find((f) => f.id === id)?.name || "Unknown";
+    const getFolderName = (id: string) => folders.find((f) => f.id === id)?.name || t.links.unknownFolder;
 
     return (
         <div className="min-h-screen bg-gray-50 dark:bg-gray-900 pb-24 pt-4 px-4 transition-colors">
             {/* Header */}
             <div className="mb-6 flex items-center justify-between">
-                <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Links</h1>
+                <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{t.links.title}</h1>
                 <button
                     onClick={() => setIsAddModalOpen(true)}
                     className="rounded-full bg-blue-600 p-2 text-white shadow-lg transition-transform hover:scale-105 active:scale-95 hover:bg-blue-700"
@@ -39,7 +43,7 @@ export function LinksHome() {
             <div className="mb-4 relative">
                 <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
                 <Input
-                    placeholder="Search links..."
+                    placeholder={t.links.searchPlaceholder}
                     className="pl-9"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
@@ -57,7 +61,7 @@ export function LinksHome() {
                             : "border-gray-200 bg-white text-gray-600 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300"
                     )}
                 >
-                    All
+                    {t.links.all}
                 </button>
                 {folders.map((folder) => (
                     <button
@@ -82,7 +86,7 @@ export function LinksHome() {
                         <div className="mb-4 rounded-full bg-gray-100 dark:bg-gray-800 p-4">
                             <Search className="h-8 w-8 text-gray-400 dark:text-gray-500" />
                         </div>
-                        <p className="text-gray-500 dark:text-gray-400">No links found.</p>
+                        <p className="text-gray-500 dark:text-gray-400">{t.links.noLinks}</p>
                     </div>
                 ) : (
                     filteredLinks.map((link) => (
@@ -150,3 +154,4 @@ export function LinksHome() {
         </div>
     );
 }
+

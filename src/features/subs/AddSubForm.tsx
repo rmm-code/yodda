@@ -5,29 +5,18 @@ import { Input } from "../../components/ui/Input";
 import { Button } from "../../components/ui/Button";
 import { cn } from "../../lib/utils";
 import { BookOpen, Briefcase, Film, DollarSign, Heart, MoreHorizontal } from "lucide-react";
+import { useLanguageStore } from "../../lib/useLanguageStore";
+import { getTranslations } from "../../lib/translations";
 
 interface AddSubFormProps {
     isOpen: boolean;
     onClose: () => void;
 }
 
-const CATEGORIES: { value: Category; label: string; icon: any }[] = [
-    { value: "Education", label: "Education", icon: BookOpen },
-    { value: "Productivity", label: "Productivity", icon: Briefcase },
-    { value: "Entertainment", label: "Entertainment", icon: Film },
-    { value: "Finance", label: "Finance", icon: DollarSign },
-    { value: "Health", label: "Health", icon: Heart },
-    { value: "Other", label: "Other", icon: MoreHorizontal },
-];
-
-const CYCLES: { value: BillingCycle; label: string }[] = [
-    { value: "weekly", label: "Weekly" },
-    { value: "monthly", label: "Monthly" },
-    { value: "yearly", label: "Yearly" },
-];
-
 export function AddSubForm({ isOpen, onClose }: AddSubFormProps) {
     const { addSubscription } = useSubStore();
+    const { language } = useLanguageStore();
+    const t = getTranslations(language);
 
     const [name, setName] = React.useState("");
     const [category, setCategory] = React.useState<Category>("Other");
@@ -35,6 +24,21 @@ export function AddSubForm({ isOpen, onClose }: AddSubFormProps) {
     const [currency, setCurrency] = React.useState("USD");
     const [cycle, setCycle] = React.useState<BillingCycle>("monthly");
     const [date, setDate] = React.useState("");
+
+    const CATEGORIES: { value: Category; label: string; icon: any }[] = [
+        { value: "Education", label: t.subs.categories.Education, icon: BookOpen },
+        { value: "Productivity", label: t.subs.categories.Productivity, icon: Briefcase },
+        { value: "Entertainment", label: t.subs.categories.Entertainment, icon: Film },
+        { value: "Finance", label: t.subs.categories.Finance, icon: DollarSign },
+        { value: "Health", label: t.subs.categories.Health, icon: Heart },
+        { value: "Other", label: t.subs.categories.Other, icon: MoreHorizontal },
+    ];
+
+    const CYCLES: { value: BillingCycle; label: string }[] = [
+        { value: "weekly", label: t.subs.cycles.weekly },
+        { value: "monthly", label: t.subs.cycles.monthly },
+        { value: "yearly", label: t.subs.cycles.yearly },
+    ];
 
     React.useEffect(() => {
         if (isOpen) {
@@ -65,18 +69,18 @@ export function AddSubForm({ isOpen, onClose }: AddSubFormProps) {
     };
 
     return (
-        <Modal isOpen={isOpen} onClose={onClose} title="Track Subscription">
+        <Modal isOpen={isOpen} onClose={onClose} title={t.subs.trackTitle}>
             <form onSubmit={handleSubmit} className="space-y-4">
                 <Input
-                    label="Name"
-                    placeholder="Netflix, Spotify..."
+                    label={t.subs.nameLabel}
+                    placeholder={t.subs.namePlaceholder}
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                     required
                 />
 
                 <div className="space-y-2">
-                    <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Category</label>
+                    <label className="text-sm font-medium text-gray-700 dark:text-gray-300">{t.subs.categoryLabel}</label>
                     <div className="grid grid-cols-3 gap-2">
                         {CATEGORIES.map((cat) => (
                             <button
@@ -99,7 +103,7 @@ export function AddSubForm({ isOpen, onClose }: AddSubFormProps) {
 
                 <div className="flex space-x-2">
                     <Input
-                        label="Amount"
+                        label={t.subs.amountLabel}
                         type="number"
                         step="0.01"
                         placeholder="0.00"
@@ -109,7 +113,7 @@ export function AddSubForm({ isOpen, onClose }: AddSubFormProps) {
                         className="flex-1"
                     />
                     <div className="w-24 space-y-1">
-                        <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Currency</label>
+                        <label className="text-sm font-medium text-gray-700 dark:text-gray-300">{t.subs.currencyLabel}</label>
                         <select
                             value={currency}
                             onChange={(e) => setCurrency(e.target.value)}
@@ -124,7 +128,7 @@ export function AddSubForm({ isOpen, onClose }: AddSubFormProps) {
 
                 <div className="flex space-x-2">
                     <div className="flex-1 space-y-1">
-                        <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Billing Cycle</label>
+                        <label className="text-sm font-medium text-gray-700 dark:text-gray-300">{t.subs.cycleLabel}</label>
                         <select
                             value={cycle}
                             onChange={(e) => setCycle(e.target.value as BillingCycle)}
@@ -139,7 +143,7 @@ export function AddSubForm({ isOpen, onClose }: AddSubFormProps) {
                     </div>
                     <div className="flex-1">
                         <Input
-                            label="Next Bill Date"
+                            label={t.subs.dateLabel}
                             type="date"
                             value={date}
                             onChange={(e) => setDate(e.target.value)}
@@ -149,9 +153,10 @@ export function AddSubForm({ isOpen, onClose }: AddSubFormProps) {
                 </div>
 
                 <Button type="submit" className="w-full">
-                    Track Subscription
+                    {t.subs.trackButton}
                 </Button>
             </form>
         </Modal>
     );
 }
+

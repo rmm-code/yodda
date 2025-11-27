@@ -4,11 +4,14 @@ import { useSubStore } from "./useSubStore";
 import { AddSubForm } from "./AddSubForm";
 import { Card } from "../../components/ui/Card";
 import { SpendingDashboard } from "./SpendingDashboard";
-
+import { useLanguageStore } from "../../lib/useLanguageStore";
+import { getTranslations } from "../../lib/translations";
 
 export function SubsHome() {
     const { subscriptions, deleteSubscription } = useSubStore();
     const [isAddModalOpen, setIsAddModalOpen] = React.useState(false);
+    const { language } = useLanguageStore();
+    const t = getTranslations(language);
 
     const sortedSubs = [...subscriptions].sort((a, b) =>
         new Date(a.next_billing_date).getTime() - new Date(b.next_billing_date).getTime()
@@ -16,14 +19,14 @@ export function SubsHome() {
 
     const formatDate = (dateStr: string) => {
         const date = new Date(dateStr);
-        return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+        return date.toLocaleDateString(language === 'en' ? "en-US" : language === 'ru' ? "ru-RU" : "uz-UZ", { month: "short", day: "numeric" });
     };
 
     return (
         <div className="min-h-screen bg-gray-50 dark:bg-gray-900 pb-24 pt-4 px-4 transition-colors">
             {/* Header */}
             <div className="mb-6 flex items-center justify-between">
-                <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Subscriptions</h1>
+                <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{t.subs.title}</h1>
                 <button
                     onClick={() => setIsAddModalOpen(true)}
                     className="rounded-full bg-blue-600 p-2 text-white shadow-lg transition-transform hover:scale-105 active:scale-95 hover:bg-blue-700"
@@ -39,7 +42,7 @@ export function SubsHome() {
             <div className="space-y-3">
                 {sortedSubs.length === 0 ? (
                     <div className="text-center py-12 text-gray-500 dark:text-gray-400">
-                        No subscriptions tracked yet.
+                        {t.subs.noSubs}
                     </div>
                 ) : (
                     sortedSubs.map((sub) => (
@@ -51,7 +54,7 @@ export function SubsHome() {
                                 <div>
                                     <h3 className="font-semibold text-gray-900 dark:text-white">{sub.name}</h3>
                                     <p className="text-xs text-gray-500 dark:text-gray-400">
-                                        Next: {formatDate(sub.next_billing_date)}
+                                        {t.subs.next} {formatDate(sub.next_billing_date)}
                                     </p>
                                 </div>
                             </div>
@@ -61,7 +64,7 @@ export function SubsHome() {
                                         ${sub.amount.toFixed(2)}
                                     </p>
                                     <p className="text-xs text-gray-500 dark:text-gray-400 capitalize">
-                                        {sub.billing_cycle_type}
+                                        {t.subs.cycles[sub.billing_cycle_type]}
                                     </p>
                                 </div>
                                 <button
@@ -80,3 +83,4 @@ export function SubsHome() {
         </div>
     );
 }
+
