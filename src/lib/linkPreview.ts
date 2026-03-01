@@ -5,14 +5,27 @@ export interface LinkPreview {
   siteName?: string;
 }
 
+/** Fetch via XMLHttpRequest to avoid Telegram WebView's "Open Link" interception. */
+function xhrGet(url: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("GET", url, true);
+    xhr.timeout = 8000;
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) resolve(xhr.responseText);
+      else reject(new Error(`HTTP ${xhr.status}`));
+    };
+    xhr.onerror = () => reject(new Error("Network error"));
+    xhr.ontimeout = () => reject(new Error("Timeout"));
+    xhr.send();
+  });
+}
+
 export async function fetchLinkPreview(url: string): Promise<LinkPreview | null> {
   try {
-    // Use a CORS proxy to fetch Open Graph data
-    // For production, you'd want to use your own backend or a service like LinkPreview API
     const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
-    
-    const response = await fetch(proxyUrl);
-    const data = await response.json();
+    const raw = await xhrGet(proxyUrl);
+    const data = JSON.parse(raw) as { contents?: string };
     
     if (!data.contents) return null;
     
