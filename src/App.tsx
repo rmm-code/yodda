@@ -9,11 +9,20 @@ import { Settings } from "./pages/Settings";
 import { useThemeStore } from "./lib/useThemeStore";
 import { useLanguageStore, type Language } from "./lib/useLanguageStore";
 import { getTranslations } from "./lib/translations";
+import { useSubStore } from "./features/subs/useSubStore";
+import { syncSubscriptionsNow } from "./lib/syncSubscriptions";
 
 function App() {
   const { theme } = useThemeStore();
   const { language, setLanguage } = useLanguageStore();
   const t = getTranslations(language);
+  const { subscriptions } = useSubStore();
+
+  // Sync subscriptions to backend on first load so the bot has up-to-date data
+  useEffect(() => {
+    void syncSubscriptionsNow(subscriptions);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // intentionally run once on mount
 
   // Check URL parameter for language on mount
   useEffect(() => {

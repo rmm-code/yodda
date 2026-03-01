@@ -29,7 +29,7 @@ export function Tabs({ items }: TabsProps) {
                                 isActive ? "text-blue-600 dark:text-blue-400" : "text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-200"
                             )}
                         >
-                            <item.icon className={cn("h-6 w-6", isActive && "fill-current")} />
+                            <item.icon className="h-6 w-6" />
                             <span>{item.label}</span>
                         </Link>
                     );

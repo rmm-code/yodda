@@ -2,90 +2,132 @@ import * as React from "react";
 import { useThemeStore } from "../lib/useThemeStore";
 import { cn } from "../lib/utils";
 import { Card } from "../components/ui/Card";
-import { Moon, Shield, LogOut, Languages, Phone } from "lucide-react";
+import { Moon, Shield, LogOut, Languages, Phone, Bell } from "lucide-react";
 import { useLanguageStore } from "../lib/useLanguageStore";
 import { getTranslations } from "../lib/translations";
 import { useUserStore } from "../lib/useUserStore";
+import { useSubStore } from "../features/subs/useSubStore";
+
+type ReminderItem = {
+    name: string;
+    reminderAt: Date;
+    renewal: Date;
+};
+
+const getLocaleByLanguage = (language: "en" | "ru" | "uz") =>
+    language === "en" ? "en-US" : language === "ru" ? "ru-RU" : "uz-UZ";
+
+const parseReminderTime = (value: string) => {
+    const [hour, minute] = value.split(":").map((part) => Number(part));
+    return {
+        hour: Number.isNaN(hour) ? 9 : hour,
+        minute: Number.isNaN(minute) ? 0 : minute,
+    };
+};
+
+const buildReminderItems = (
+    subscriptions: Array<{ name: string; next_billing_date: string }>,
+    reminderDays: number,
+    reminderTime: string
+): ReminderItem[] => {
+    const { hour, minute } = parseReminderTime(reminderTime);
+
+    return subscriptions.map((sub) => {
+        const renewal = new Date(sub.next_billing_date);
+        const reminderAt = new Date(renewal);
+        reminderAt.setDate(reminderAt.getDate() - reminderDays);
+        reminderAt.setHours(hour, minute, 0, 0);
+        return { name: sub.name, reminderAt, renewal };
+    });
+};
+
+const getParamFromSearchOrHash = (key: string): string | null => {
+    const searchParams = new URLSearchParams(window.location.search);
+    const hashParams = new URLSearchParams(window.location.hash.split("?")[1] || "");
+    return searchParams.get(key) || hashParams.get(key);
+};
 
 export function Settings() {
     const { theme, toggleTheme } = useThemeStore();
     const { language, setLanguage } = useLanguageStore();
-    const { profile, setProfile } = useUserStore();
+    const { profile, setProfile, updateProfile } = useUserStore();
+    const { subscriptions } = useSubStore();
     const t = getTranslations(language);
-    const [photoError, setPhotoError] = React.useState(false);
 
-    // Load user data from Telegram WebApp
+    const [photoError, setPhotoError] = React.useState(false);
+    const [remindersEnabled, setRemindersEnabled] = React.useState(true);
+    const [reminderDays, setReminderDays] = React.useState(3);
+    const [reminderTime, setReminderTime] = React.useState("09:00");
+    const [isReminderSaved, setIsReminderSaved] = React.useState(false);
+
     React.useEffect(() => {
         const loadUserData = async () => {
             try {
-                        // Get phone number and photo from URL parameter (passed by bot) - check both search and hash
-                        const urlParams = new URLSearchParams(window.location.search);
-                        const hashParams = new URLSearchParams(window.location.hash.split('?')[1] || '');
-                        const phoneFromUrl = urlParams.get('phone') || hashParams.get('phone');
-                        const photoFromUrl = urlParams.get('photo') || hashParams.get('photo');
-                
-                // Check if we're in Telegram
-                if (typeof window !== 'undefined') {
-                    // Try to load WebApp SDK
-                    let WebApp = null;
-                    try {
-                        const module = await import('@twa-dev/sdk');
-                        WebApp = module.default;
-                        
-                        // Wait a bit for WebApp to initialize if needed
-                        if (!WebApp.initDataUnsafe && (window as any).Telegram?.WebApp) {
-                            await new Promise(resolve => setTimeout(resolve, 200));
-                        }
-                    } catch (e) {
-                        console.log('WebApp SDK not available');
-                    }
-                    
-                    // Try to get from WebApp SDK first
-                    if (WebApp && WebApp.initDataUnsafe?.user) {
-                        const user = WebApp.initDataUnsafe.user;
-                        
-                        setProfile({
-                            id: user.id,
-                            firstName: user.first_name || undefined,
-                            lastName: user.last_name || undefined,
-                            username: user.username || undefined,
-                            phoneNumber: phoneFromUrl || profile?.phoneNumber || undefined,
-                            photoUrl: photoFromUrl || profile?.photoUrl || undefined,
-                        });
-                        return;
-                    }
+                if (typeof window === "undefined") {
+                    return;
                 }
-                
-                // Get all user data from URL parameters (passed by bot)
-                const urlParams2 = new URLSearchParams(window.location.search);
-                const hashParams2 = new URLSearchParams(window.location.hash.split('?')[1] || '');
-                const phoneFromUrl2 = urlParams2.get('phone') || hashParams2.get('phone');
-                const photoFromUrl2 = urlParams2.get('photo') || hashParams2.get('photo');
-                const firstNameFromUrl = urlParams2.get('first_name') || hashParams2.get('first_name');
-                const lastNameFromUrl = urlParams2.get('last_name') || hashParams2.get('last_name');
-                const usernameFromUrl = urlParams2.get('username') || hashParams2.get('username');
-                
-                // If we have data from URL, use it (this is the primary source from bot)
-                if (phoneFromUrl2 || firstNameFromUrl || lastNameFromUrl || usernameFromUrl || photoFromUrl2) {
+
+                const phoneFromUrl = getParamFromSearchOrHash("phone");
+                const photoFromUrl = getParamFromSearchOrHash("photo");
+                const firstNameFromUrl = getParamFromSearchOrHash("first_name");
+                const lastNameFromUrl = getParamFromSearchOrHash("last_name");
+                const usernameFromUrl = getParamFromSearchOrHash("username");
+                const hasProfileFromUrl = Boolean(
+                    phoneFromUrl || photoFromUrl || firstNameFromUrl || lastNameFromUrl || usernameFromUrl
+                );
+
+                let webAppUser: {
+                    id: number;
+                    first_name?: string;
+                    last_name?: string;
+                    username?: string;
+                } | null = null;
+
+                try {
+                    const module = await import("@twa-dev/sdk");
+                    const webApp = module.default;
+
+                    if (
+                        !webApp.initDataUnsafe &&
+                        (window as Window & { Telegram?: { WebApp?: unknown } }).Telegram?.WebApp
+                    ) {
+                        await new Promise((resolve) => setTimeout(resolve, 200));
+                    }
+
+                    webAppUser = webApp.initDataUnsafe?.user || null;
+                } catch {
+                    webAppUser = null;
+                }
+
+                if (webAppUser) {
                     setProfile({
-                        id: profile?.id,
-                        firstName: firstNameFromUrl || profile?.firstName,
-                        lastName: lastNameFromUrl || profile?.lastName,
-                        username: usernameFromUrl || profile?.username,
-                        phoneNumber: phoneFromUrl2 || profile?.phoneNumber,
-                        photoUrl: photoFromUrl2 || profile?.photoUrl,
+                        id: webAppUser.id,
+                        firstName: webAppUser.first_name || undefined,
+                        lastName: webAppUser.last_name || undefined,
+                        username: webAppUser.username || undefined,
+                        phoneNumber: phoneFromUrl || undefined,
+                        photoUrl: photoFromUrl || undefined,
                     });
                     return;
                 }
-                
-                // Only use mock data if we're in development (not in Telegram) AND no URL params at all
-                // Check if we're actually in Telegram environment
-                const isTelegram = typeof window !== 'undefined' && 
-                    ((window as any).Telegram?.WebApp || window.location.href.includes('t.me'));
-                
-                // Only show mock data if NOT in Telegram and NO URL params
-                if (!isTelegram && !phoneFromUrl && !firstNameFromUrl && !lastNameFromUrl && !usernameFromUrl && !photoFromUrl && !profile) {
-                    console.log('Using mock data for local development');
+
+                if (hasProfileFromUrl) {
+                    setProfile({
+                        firstName: firstNameFromUrl || undefined,
+                        lastName: lastNameFromUrl || undefined,
+                        username: usernameFromUrl || undefined,
+                        phoneNumber: phoneFromUrl || undefined,
+                        photoUrl: photoFromUrl || undefined,
+                    });
+                    return;
+                }
+
+                const isTelegram = Boolean(
+                    (window as Window & { Telegram?: { WebApp?: unknown } }).Telegram?.WebApp ||
+                        window.location.href.includes("t.me")
+                );
+
+                if (!isTelegram && !profile) {
                     setProfile({
                         id: 123456789,
                         firstName: "John",
@@ -95,17 +137,15 @@ export function Settings() {
                     });
                 }
             } catch (error) {
-                console.error('Error loading user data:', error);
-                // Fallback: try to get all data from URL
-                const urlParams = new URLSearchParams(window.location.search);
-                const hashParams = new URLSearchParams(window.location.hash.split('?')[1] || '');
-                const phoneFromUrl = urlParams.get('phone') || hashParams.get('phone');
-                const photoFromUrl = urlParams.get('photo') || hashParams.get('photo');
-                const firstNameFromUrl = urlParams.get('first_name') || hashParams.get('first_name');
-                const lastNameFromUrl = urlParams.get('last_name') || hashParams.get('last_name');
-                const usernameFromUrl = urlParams.get('username') || hashParams.get('username');
-                
-                if ((phoneFromUrl || firstNameFromUrl || lastNameFromUrl || usernameFromUrl || photoFromUrl) && !profile) {
+                console.error("Error loading user data:", error);
+
+                const phoneFromUrl = getParamFromSearchOrHash("phone");
+                const photoFromUrl = getParamFromSearchOrHash("photo");
+                const firstNameFromUrl = getParamFromSearchOrHash("first_name");
+                const lastNameFromUrl = getParamFromSearchOrHash("last_name");
+                const usernameFromUrl = getParamFromSearchOrHash("username");
+
+                if (phoneFromUrl || photoFromUrl || firstNameFromUrl || lastNameFromUrl || usernameFromUrl) {
                     setProfile({
                         firstName: firstNameFromUrl || undefined,
                         lastName: lastNameFromUrl || undefined,
@@ -116,14 +156,64 @@ export function Settings() {
                 }
             }
         };
-        
+
         loadUserData();
     }, [setProfile]);
-    
-    // Reset photo error when photo URL changes
+
     React.useEffect(() => {
         setPhotoError(false);
     }, [profile?.photoUrl]);
+
+    React.useEffect(() => {
+        const pref = profile?.reminderPreference;
+        if (!pref) {
+            return;
+        }
+
+        setRemindersEnabled(pref.enabled);
+        setReminderDays(pref.leadDays);
+        setReminderTime(pref.reminderTime);
+    }, [profile?.reminderPreference]);
+
+    const nextReminderText = React.useMemo(() => {
+        if (!remindersEnabled) {
+            return null;
+        }
+        const locale = getLocaleByLanguage(language);
+        const now = new Date();
+        const nextReminder = buildReminderItems(subscriptions, reminderDays, reminderTime)
+            .filter((item) => item.renewal >= now)
+            .sort((a, b) => a.reminderAt.getTime() - b.reminderAt.getTime())[0];
+
+        if (!nextReminder) {
+            return null;
+        }
+
+        return `${nextReminder.name} • ${nextReminder.reminderAt.toLocaleString(locale)}`;
+    }, [remindersEnabled, reminderDays, reminderTime, subscriptions, language]);
+
+    const dueReminderNames = React.useMemo(() => {
+        if (!remindersEnabled) {
+            return [] as string[];
+        }
+        const now = new Date();
+
+        return buildReminderItems(subscriptions, reminderDays, reminderTime)
+            .filter((item) => now >= item.reminderAt && now <= item.renewal)
+            .map((item) => item.name);
+    }, [remindersEnabled, reminderDays, reminderTime, subscriptions]);
+
+    const saveReminderPreference = () => {
+        updateProfile({
+            reminderPreference: {
+                enabled: remindersEnabled,
+                leadDays: reminderDays,
+                reminderTime,
+            },
+        });
+        setIsReminderSaved(true);
+        window.setTimeout(() => setIsReminderSaved(false), 1500);
+    };
 
     const languageOptions = [
         { code: "uz", label: "UZ" },
@@ -170,6 +260,63 @@ export function Settings() {
                             </div>
                         )}
                     </div>
+                </Card>
+
+                <Card className="p-4 space-y-4 dark:bg-gray-800 dark:border-gray-700">
+                    <div className="flex items-center space-x-3">
+                        <Bell className="h-5 w-5 text-gray-500 dark:text-gray-400" />
+                        <span className="font-medium text-gray-900 dark:text-white">{t.settings.remindersTitle}</span>
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                        <span className="text-sm text-gray-700 dark:text-gray-300">{t.settings.remindersEnabled}</span>
+                        <button
+                            onClick={() => setRemindersEnabled((value) => !value)}
+                            className={cn("h-6 w-11 rounded-full p-1 transition-colors", remindersEnabled ? "bg-blue-600" : "bg-gray-200")}
+                        >
+                            <div className={cn("h-4 w-4 rounded-full bg-white shadow-sm transition-transform", remindersEnabled ? "translate-x-5" : "translate-x-0")} />
+                        </button>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                        <label className="space-y-1">
+                            <span className="text-xs text-gray-500 dark:text-gray-400">{t.settings.reminderDaysLabel}</span>
+                            <input
+                                type="number"
+                                min={0}
+                                max={30}
+                                value={reminderDays}
+                                onChange={(event) => setReminderDays(Math.max(0, Math.min(30, Number(event.target.value) || 0)))}
+                                className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                            />
+                        </label>
+
+                        <label className="space-y-1">
+                            <span className="text-xs text-gray-500 dark:text-gray-400">{t.settings.reminderTimeLabel}</span>
+                            <input
+                                type="time"
+                                value={reminderTime}
+                                onChange={(event) => setReminderTime(event.target.value)}
+                                className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                            />
+                        </label>
+                    </div>
+
+                    <button
+                        onClick={saveReminderPreference}
+                        className="w-full rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+                    >
+                        {isReminderSaved ? t.settings.reminderSaved : t.settings.saveReminder}
+                    </button>
+
+                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                        {t.settings.nextReminder}: {nextReminderText || t.settings.noUpcomingReminders}
+                    </p>
+                    {dueReminderNames.length > 0 && (
+                        <p className="text-xs font-medium text-orange-600 dark:text-orange-400">
+                            {t.settings.dueNow}: {dueReminderNames.join(", ")}
+                        </p>
+                    )}
                 </Card>
 
                 <Card className="space-y-1 p-0 overflow-hidden dark:bg-gray-800 dark:border-gray-700">

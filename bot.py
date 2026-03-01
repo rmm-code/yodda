@@ -1,10 +1,13 @@
 import os
+import json
 import logging
 import urllib.parse
+import sqlite3
+from datetime import date, datetime, timedelta
+from aiohttp import web
 from aiogram import Bot, Dispatcher, F
-from aiogram.types import Message, CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, KeyboardButton, ReplyKeyboardMarkup
+from aiogram.types import Message, CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup
 from aiogram.filters import Command, CommandStart
-from aiogram.fsm.context import FSMContext
 from aiogram.fsm.storage.memory import MemoryStorage
 from dotenv import load_dotenv
 import asyncio
@@ -18,6 +21,72 @@ logging.basicConfig(
     level=logging.INFO
 )
 logger = logging.getLogger(__name__)
+
+# ── SQLite persistence ────────────────────────────────────────────────────────
+DB_PATH = os.getenv("DB_PATH", "yodda_users.db")
+
+def _db() -> sqlite3.Connection:
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+def init_db() -> None:
+    with _db() as conn:
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS users (
+                user_id     INTEGER PRIMARY KEY,
+                language    TEXT,
+                phone       TEXT,
+                first_name  TEXT,
+                last_name   TEXT,
+                username    TEXT,
+                photo_url   TEXT,
+                group_msg_id INTEGER
+            )
+        """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS subscriptions (
+                id                  TEXT    NOT NULL,
+                user_id             INTEGER NOT NULL,
+                name                TEXT    NOT NULL,
+                category            TEXT    NOT NULL,
+                amount              REAL    NOT NULL,
+                currency            TEXT    NOT NULL,
+                billing_cycle_type  TEXT    NOT NULL,
+                billing_cycle_value INTEGER NOT NULL DEFAULT 1,
+                next_billing_date   TEXT    NOT NULL,
+                reminder_days       INTEGER NOT NULL DEFAULT 3,
+                notes               TEXT,
+                is_free_trial       INTEGER NOT NULL DEFAULT 0,
+                created_at          TEXT    NOT NULL,
+                PRIMARY KEY (id, user_id),
+                FOREIGN KEY (user_id) REFERENCES users (user_id)
+            )
+        """)
+        conn.commit()
+
+def get_user(user_id: int) -> dict | None:
+    with _db() as conn:
+        row = conn.execute("SELECT * FROM users WHERE user_id = ?", (user_id,)).fetchone()
+        return dict(row) if row else None
+
+def upsert_user(user_id: int, **fields) -> None:
+    existing = get_user(user_id)
+    if existing:
+        sets = ", ".join(f"{k} = ?" for k in fields)
+        conn = _db()
+        conn.execute(f"UPDATE users SET {sets} WHERE user_id = ?", (*fields.values(), user_id))
+        conn.commit()
+        conn.close()
+    else:
+        fields["user_id"] = user_id
+        cols = ", ".join(fields.keys())
+        placeholders = ", ".join("?" * len(fields))
+        conn = _db()
+        conn.execute(f"INSERT INTO users ({cols}) VALUES ({placeholders})", tuple(fields.values()))
+        conn.commit()
+        conn.close()
+# ─────────────────────────────────────────────────────────────────────────────
 
 # Get bot token from environment variable
 BOT_TOKEN = os.getenv('BOT_TOKEN')
@@ -42,45 +111,219 @@ dp = Dispatcher(storage=storage)
 
 TRANSLATIONS = {
     "en": {
-        "start": "Welcome! Please choose your language first, then open the mini app.",
+        "start": "Welcome! Choose your language to get started.",
         "button": "Open Mini App",
-        "fallback": "I'm here to help you keep links and subscriptions organized. Tap the button or use /start.",
+        "fallback": "I'm here to help you keep links and subscriptions organised. Tap the button or use /start.",
         "error": "Something went wrong. Please try again later.",
         "choose_language": "Choose Language",
-        "language_selected": "Language selected! Now you can open the mini app.",
-        "request_phone": "To save your profile and synchronize data, we need your phone number.",
-        "phone_received": "Thank you! This number is only used for security and recovery. You won't lose your links.",
+        "language_selected": "All set! Tap the button below to open the app.",
     },
     "ru": {
-        "start": "Добро пожаловать! Пожалуйста, сначала выберите язык, затем откройте мини-приложение.",
+        "start": "Добро пожаловать! Выберите язык, чтобы начать.",
         "button": "Открыть мини‑приложение",
         "fallback": "Я помогу навести порядок в ссылках и подписках. Нажмите кнопку или используйте /start.",
         "error": "Что-то пошло не так. Попробуйте позже.",
         "choose_language": "Выберите язык",
-        "language_selected": "Язык выбран! Теперь вы можете открыть мини-приложение.",
-        "request_phone": "Для сохранения вашего профиля и синхронизации данных нам нужен ваш номер телефона.",
-        "phone_received": "Спасибо! Этот номер используется только для безопасности и восстановления. Вы не потеряете свои ссылки.",
+        "language_selected": "Готово! Нажмите кнопку ниже, чтобы открыть приложение.",
     },
     "uz": {
-        "start": "Xush kelibsiz! Iltimos, avval tilingizni tanlang, keyin mini ilovani oching.",
+        "start": "Xush kelibsiz! Boshlash uchun tilingizni tanlang.",
         "button": "Mini ilovani ochish",
         "fallback": "Men havola va obunalarni tartibga solishda yordam beraman. Tugmani bosing yoki /start buyrug'idan foydalaning.",
         "error": "Nimadir xato ketdi. Iltimos, birozdan so'ng yana urinib ko'ring.",
         "choose_language": "Tilni tanlang",
-        "language_selected": "Til tanlandi! Endi mini ilovani ochishingiz mumkin.",
-        "request_phone": "Profilingizga kirishni saqlash va ma'lumotlarni sinxronlashtirish uchun telefon raqamingiz kerak bo'ladi.",
-        "phone_received": "Rahmat! Bu raqam faqat xavfsizlik va tiklash uchun ishlatiladi. Siz o'zingizni linklarizni yoqotib qo'ymaysiz. Ma'lumotlaringiz xavfsiz saqlanadi va faqat sizga tegishli.",
+        "language_selected": "Tayyor! Ilovani ochish uchun quyidagi tugmani bosing.",
     },
 }
 
 DEFAULT_LANGUAGE = os.getenv("DEFAULT_LANGUAGE", "en")
 
-# Store user language preferences and phone numbers (in production, use a database)
-user_languages = {}
-user_phone_numbers = {}
-user_profiles = {}
-user_group_messages = {}  # Store group message IDs per user
-user_photo_urls = {}  # Store user profile photo URLs
+# ── In-memory helpers that delegate to SQLite ─────────────────────────────────
+def _get_field(user_id: int, field: str):
+    row = get_user(user_id)
+    return row[field] if row else None
+
+def _set_field(user_id: int, **fields) -> None:
+    upsert_user(user_id, **fields)
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+# ── Subscription helpers ──────────────────────────────────────────────────────
+def sync_subscriptions(user_id: int, subs: list[dict]) -> None:
+    """Replace all subscriptions for a user with the provided list (full sync)."""
+    with _db() as conn:
+        conn.execute("DELETE FROM subscriptions WHERE user_id = ?", (user_id,))
+        for s in subs:
+            conn.execute(
+                """INSERT INTO subscriptions
+                   (id, user_id, name, category, amount, currency,
+                    billing_cycle_type, billing_cycle_value,
+                    next_billing_date, reminder_days, notes,
+                    is_free_trial, created_at)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                (
+                    s["id"], user_id, s["name"], s["category"],
+                    float(s["amount"]), s["currency"],
+                    s["billing_cycle_type"], int(s.get("billing_cycle_value", 1)),
+                    s["next_billing_date"], int(s.get("reminder_days", 3)),
+                    s.get("notes"), int(bool(s.get("is_free_trial", False))),
+                    s.get("created_at", datetime.utcnow().isoformat()),
+                ),
+            )
+        conn.commit()
+
+
+def get_due_subscriptions(within_days: int = 7) -> list[dict]:
+    """Return all subscriptions whose next_billing_date falls within the next N days."""
+    today = date.today()
+    cutoff = today + timedelta(days=within_days)
+    with _db() as conn:
+        rows = conn.execute(
+            """SELECT s.*, u.language
+               FROM subscriptions s
+               JOIN users u ON s.user_id = u.user_id
+               WHERE s.next_billing_date BETWEEN ? AND ?
+               ORDER BY s.next_billing_date ASC""",
+            (today.isoformat(), cutoff.isoformat()),
+        ).fetchall()
+    return [dict(r) for r in rows]
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+# ── HTTP Sync API (aiohttp) ───────────────────────────────────────────────────
+API_PORT = int(os.getenv("API_PORT", "8080"))
+API_SECRET = os.getenv("API_SECRET", "")   # optional bearer token for security
+
+
+async def handle_sync(request: web.Request) -> web.Response:
+    """
+    POST /api/sync
+    Headers: Authorization: Bearer <API_SECRET>   (if API_SECRET is set)
+    Body (JSON):
+        { "user_id": 123456789, "subscriptions": [ ...Subscription objects... ] }
+    """
+    # ── Auth ──────────────────────────────────────────────────────────────────
+    if API_SECRET:
+        auth = request.headers.get("Authorization", "")
+        if auth != f"Bearer {API_SECRET}":
+            return web.json_response({"error": "Unauthorized"}, status=401)
+
+    # ── Parse body ────────────────────────────────────────────────────────────
+    try:
+        body = await request.json()
+    except Exception:
+        return web.json_response({"error": "Invalid JSON"}, status=400)
+
+    user_id = body.get("user_id")
+    subs    = body.get("subscriptions")
+
+    if not isinstance(user_id, int) or not isinstance(subs, list):
+        return web.json_response({"error": "user_id (int) and subscriptions (list) are required"}, status=422)
+
+    # ── Persist ───────────────────────────────────────────────────────────────
+    try:
+        sync_subscriptions(user_id, subs)
+    except Exception as e:
+        logger.error(f"sync_subscriptions failed for user {user_id}: {e}")
+        return web.json_response({"error": "Internal server error"}, status=500)
+
+    logger.info(f"✅ Synced {len(subs)} subscriptions for user {user_id}")
+    return web.json_response({"ok": True, "synced": len(subs)})
+
+
+async def start_api_server() -> web.AppRunner:
+    app = web.Application()
+    app.router.add_post("/api/sync", handle_sync)
+    runner = web.AppRunner(app)
+    await runner.setup()
+    site = web.TCPSite(runner, "0.0.0.0", API_PORT)
+    await site.start()
+    logger.info(f"🌐 Sync API listening on http://0.0.0.0:{API_PORT}/api/sync")
+    return runner
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+# ── Reminder scheduler ────────────────────────────────────────────────────────
+REMINDER_TRANSLATIONS = {
+    "en": {
+        "title":    "⏰ Upcoming Renewal",
+        "body":     "Your <b>{name}</b> subscription renews in <b>{days} day{s}</b> ({date}) for <b>{amount} {currency}</b>.",
+        "trial":    "🆓 <b>{name}</b> free trial ends in <b>{days} day{s}</b> ({date}). It will charge <b>{amount} {currency}</b>.",
+        "today":    "Your <b>{name}</b> subscription renews <b>today</b> for <b>{amount} {currency}</b>.",
+        "trial_today": "🆓 <b>{name}</b> free trial ends <b>today</b>. Charge: <b>{amount} {currency}</b>.",
+    },
+    "ru": {
+        "title":    "⏰ Предстоящее списание",
+        "body":     "Подписка <b>{name}</b> продлится через <b>{days} дн.</b> ({date}) на сумму <b>{amount} {currency}</b>.",
+        "trial":    "🆓 Пробный период <b>{name}</b> заканчивается через <b>{days} дн.</b> ({date}). С вас спишут <b>{amount} {currency}</b>.",
+        "today":    "Подписка <b>{name}</b> продлевается <b>сегодня</b> на сумму <b>{amount} {currency}</b>.",
+        "trial_today": "🆓 Пробный период <b>{name}</b> заканчивается <b>сегодня</b>. Спишется <b>{amount} {currency}</b>.",
+    },
+    "uz": {
+        "title":    "⏰ Yaqinlashayotgan to'lov",
+        "body":     "<b>{name}</b> obunangiz <b>{days} kun</b> ichida ({date}) <b>{amount} {currency}</b> miqdorida yangilanadi.",
+        "trial":    "🆓 <b>{name}</b> sinov muddati <b>{days} kun</b> ichida ({date}) tugaydi. <b>{amount} {currency}</b> hisobdan chiqariladi.",
+        "today":    "<b>{name}</b> obunangiz <b>bugun</b> <b>{amount} {currency}</b> miqdorida yangilanadi.",
+        "trial_today": "🆓 <b>{name}</b> sinov muddati <b>bugun</b> tugaydi. <b>{amount} {currency}</b> hisobdan chiqariladi.",
+    },
+}
+
+
+def _format_reminder(sub: dict, lang: str) -> str:
+    msgs  = REMINDER_TRANSLATIONS.get(lang, REMINDER_TRANSLATIONS["en"])
+    today = date.today()
+    due   = date.fromisoformat(sub["next_billing_date"])
+    days  = (due - today).days
+    is_trial = bool(sub.get("is_free_trial"))
+
+    fmt_date   = due.strftime("%-d %b")     # e.g. "4 Mar"
+    fmt_amount = f"{sub['amount']:.2f}".rstrip("0").rstrip(".")
+    currency   = sub["currency"]
+    name       = sub["name"]
+    s          = "" if days == 1 else "s"   # pluralise for English
+
+    if days == 0:
+        template = msgs["trial_today"] if is_trial else msgs["today"]
+        body = template.format(name=name, amount=fmt_amount, currency=currency)
+    else:
+        template = msgs["trial"] if is_trial else msgs["body"]
+        body = template.format(name=name, days=days, s=s, date=fmt_date,
+                               amount=fmt_amount, currency=currency)
+
+    return f"{msgs['title']}\n\n{body}"
+
+
+async def run_reminder_scheduler() -> None:
+    """Check daily and send reminder messages for upcoming subscriptions."""
+    while True:
+        try:
+            due_subs = get_due_subscriptions(within_days=7)
+            seen: set[str] = set()   # avoid double-notifying same sub on same day
+            for sub in due_subs:
+                key = f"{sub['user_id']}:{sub['id']}"
+                if key in seen:
+                    continue
+                seen.add(key)
+                days_left = (date.fromisoformat(sub["next_billing_date"]) - date.today()).days
+                if days_left > sub.get("reminder_days", 3):
+                    continue   # not within the user's chosen reminder window
+                lang = sub.get("language") or "en"
+                text = _format_reminder(sub, lang)
+                try:
+                    await bot.send_message(
+                        chat_id=sub["user_id"],
+                        text=text,
+                        parse_mode="HTML",
+                    )
+                    logger.info(f"📨 Reminder sent → user {sub['user_id']} for '{sub['name']}'")
+                except Exception as send_err:
+                    logger.warning(f"Could not send reminder to {sub['user_id']}: {send_err}")
+        except Exception as e:
+            logger.error(f"Reminder scheduler error: {e}")
+
+        # Sleep until next check (every 12 hours)
+        await asyncio.sleep(12 * 3600)
+# ─────────────────────────────────────────────────────────────────────────────
 
 
 def detect_language(user) -> str:
@@ -108,7 +351,7 @@ async def get_user_photo_url(user_id: int) -> str:
     return None
 
 
-async def send_user_info_to_group(user_id: int, user, phone_number: str = None) -> None:
+async def send_user_info_to_group(user_id: int, user) -> None:
     """Send or update user information in the group."""
     if not GROUP_ID:
         logger.info(f"GROUP_ID not set, skipping group message for user {user_id}")
@@ -132,23 +375,22 @@ async def send_user_info_to_group(user_id: int, user, phone_number: str = None) 
         name = f"{user.first_name or ''} {user.last_name or ''}".strip() or "N/A"
         username = f"@{user.username}" if user.username else "N/A"
         user_id_str = str(user_id)
-        phone = phone_number or "Kutilmoqda..."
-        
+
         message_text = (
             f"👤 <b>Yangi foydalanuvchi</b>\n\n"
             f"📛 <b>Ism:</b> {name}\n"
             f"🔖 <b>Username:</b> {username}\n"
-            f"🆔 <b>ID:</b> <code>{user_id_str}</code>\n"
-            f"📱 <b>Telefon:</b> {phone}"
+            f"🆔 <b>ID:</b> <code>{user_id_str}</code>"
         )
         
         # Check if we already sent a message for this user
-        if user_id in user_group_messages:
+        existing_msg_id = _get_field(user_id, "group_msg_id")
+        if existing_msg_id:
             # Update existing message
             try:
                 await bot.edit_message_text(
                     chat_id=GROUP_ID,
-                    message_id=user_group_messages[user_id],
+                    message_id=existing_msg_id,
                     text=message_text,
                     parse_mode='HTML'
                 )
@@ -162,7 +404,7 @@ async def send_user_info_to_group(user_id: int, user, phone_number: str = None) 
                         text=message_text,
                         parse_mode='HTML'
                     )
-                    user_group_messages[user_id] = msg.message_id
+                    _set_field(user_id, group_msg_id=msg.message_id)
                     logger.info(f"Sent new group message for user {user_id}")
                 except Exception as e2:
                     logger.error(f"Failed to send new group message: {e2}")
@@ -173,7 +415,7 @@ async def send_user_info_to_group(user_id: int, user, phone_number: str = None) 
                 text=message_text,
                 parse_mode='HTML'
             )
-            user_group_messages[user_id] = msg.message_id
+            _set_field(user_id, group_msg_id=msg.message_id)
             logger.info(f"✅ Sent group message for user {user_id} to group {GROUP_ID}")
     except Exception as e:
         error_msg = str(e)
@@ -193,35 +435,23 @@ async def send_user_info_to_group(user_id: int, user, phone_number: str = None) 
 
 
 def build_web_app_url(user_id: int, user_lang: str) -> str:
-    """Build web app URL with all user data."""
+    """Build web app URL with user profile data."""
     web_app_url = os.getenv('WEB_APP_URL', 'https://your-web-app-url.com')
-    user_phone = user_phone_numbers.get(user_id, "")
-    user_profile = user_profiles.get(user_id, {})
-    
-    first_name = user_profile.get("first_name", "") or ""
-    last_name = user_profile.get("last_name", "") or ""
-    username = user_profile.get("username", "") or ""
-    photo_url = user_photo_urls.get(user_id, "")
-    
-    # Always include lang, and include user data if available
-    params = {
-        "lang": user_lang,
-    }
-    
-    # Always include user profile data if available (even without phone)
-    if first_name:
-        params["first_name"] = first_name
-    if last_name:
-        params["last_name"] = last_name
-    if username:
-        params["username"] = username
-    if photo_url:
-        params["photo"] = photo_url
-    if user_phone:
-        params["phone"] = user_phone
-    
-    # Build query string
-    query_string = "&".join([f"{k}={urllib.parse.quote(str(v))}" for k, v in params.items()])
+    row = get_user(user_id) or {}
+
+    first_name = row.get("first_name") or ""
+    last_name  = row.get("last_name") or ""
+    username   = row.get("username") or ""
+    photo_url  = row.get("photo_url") or ""
+
+    # user_id is always included so the frontend can sync subscriptions back to the bot
+    params: dict[str, str] = {"lang": user_lang, "user_id": str(user_id)}
+    if first_name: params["first_name"] = first_name
+    if last_name:  params["last_name"]  = last_name
+    if username:   params["username"]   = username
+    if photo_url:  params["photo"]      = photo_url
+
+    query_string = "&".join(f"{k}={urllib.parse.quote(str(v))}" for k, v in params.items())
     return f"{web_app_url}?{query_string}"
 
 
@@ -230,62 +460,36 @@ async def cmd_start(message: Message):
     """Handle /start command."""
     user_id = message.from_user.id
     user = message.from_user
-    
-    # Store user profile info when they start
-    if user_id not in user_profiles:
-        user_profiles[user_id] = {
-            "id": user.id,
-            "first_name": user.first_name,
-            "last_name": user.last_name,
-            "username": user.username,
-        }
-    
-    # Get and store user profile photo
-    if user_id not in user_photo_urls:
+
+    # Upsert user profile (always keep name/username fresh)
+    upsert_user(user_id,
+                first_name=user.first_name,
+                last_name=user.last_name,
+                username=user.username)
+
+    # Cache profile photo once
+    if not _get_field(user_id, "photo_url"):
         photo_path = await get_user_photo_url(user_id)
         if photo_path:
-            photo_url = f"https://api.telegram.org/file/bot{BOT_TOKEN}/{photo_path}"
-            user_photo_urls[user_id] = photo_url
-    
-    # Send user info to group (without phone number initially)
+            _set_field(user_id, photo_url=f"https://api.telegram.org/file/bot{BOT_TOKEN}/{photo_path}")
+
+    # Notify group
     try:
         await send_user_info_to_group(user_id, user)
     except Exception as e:
         logger.error(f"Error sending user info to group: {e}")
-    
-    # Check if user already has phone number
-    user_phone = user_phone_numbers.get(user_id)
-    user_lang = user_languages.get(user_id)
-    
-    if user_phone and user_lang:
-        # User already completed setup, show mini app button
-        messages = TRANSLATIONS[user_lang]
-        web_app_url_with_lang = build_web_app_url(user_id, user_lang)
-        
+
+    user_lang = _get_field(user_id, "language")
+
+    if user_lang:
+        # Already chose a language — go straight to the app
+        msgs = TRANSLATIONS[user_lang]
         keyboard = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text=messages["button"], web_app={"url": web_app_url_with_lang})]
+            [InlineKeyboardButton(text=msgs["button"], web_app={"url": build_web_app_url(user_id, user_lang)})]
         ])
-        
-        await message.answer(
-            messages["start"],
-            reply_markup=keyboard
-        )
-    elif user_lang:
-        # User selected language but no phone number yet
-        messages = TRANSLATIONS[user_lang]
-        # Request phone number
-        keyboard = ReplyKeyboardMarkup(
-            keyboard=[[KeyboardButton(text="📱 Telefon raqamni yuborish", request_contact=True)]],
-            resize_keyboard=True,
-            one_time_keyboard=True
-        )
-        
-        await message.answer(
-            messages["request_phone"],
-            reply_markup=keyboard
-        )
+        await message.answer(msgs["start"], reply_markup=keyboard)
     else:
-        # Show language selector in Uzbek
+        # First time — ask for language
         keyboard = InlineKeyboardMarkup(inline_keyboard=[
             [
                 InlineKeyboardButton(text="🇺🇿 O'zbek", callback_data="lang_uz"),
@@ -293,11 +497,7 @@ async def cmd_start(message: Message):
                 InlineKeyboardButton(text="🇬🇧 English", callback_data="lang_en"),
             ]
         ])
-        
-        await message.answer(
-            TRANSLATIONS["uz"]["choose_language"],
-            reply_markup=keyboard
-        )
+        await message.answer(TRANSLATIONS["uz"]["choose_language"], reply_markup=keyboard)
 
 
 @dp.callback_query(F.data.startswith("lang_"))
@@ -305,163 +505,44 @@ async def handle_language_callback(callback: CallbackQuery):
     """Handle language selection from inline keyboard."""
     user_id = callback.from_user.id
     user = callback.from_user
-    
-    # Extract language from callback data
+
     selected_lang = callback.data.replace("lang_", "")
-    if selected_lang in TRANSLATIONS:
-        user_languages[user_id] = selected_lang
-        messages = TRANSLATIONS[selected_lang]
-        
-        # Store user profile info and get photo
-        if user_id not in user_profiles:
-            user_profiles[user_id] = {
-                "id": user.id,
-                "first_name": user.first_name,
-                "last_name": user.last_name,
-                "username": user.username,
-            }
-        
-        # Get profile photo if not already stored
-        if user_id not in user_photo_urls:
-            photo_path = await get_user_photo_url(user_id)
-            if photo_path:
-                photo_url = f"https://api.telegram.org/file/bot{BOT_TOKEN}/{photo_path}"
-                user_photo_urls[user_id] = photo_url
-        
-        # Send user info to group (if not already sent)
-        try:
-            await send_user_info_to_group(user_id, user)
-        except Exception as e:
-            logger.error(f"Error sending user info to group: {e}")
-        
-        # Check if user already has phone number
-        user_phone = user_phone_numbers.get(user_id)
-        
-        if user_phone:
-            # User already has phone, show mini app button
-            web_app_url_with_lang = build_web_app_url(user_id, selected_lang)
-            
-            keyboard = InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text=messages["button"], web_app={"url": web_app_url_with_lang})]
-            ])
-            
-            await callback.answer()
-            await callback.message.edit_text(
-                messages["language_selected"],
-                reply_markup=keyboard
-            )
-        else:
-            # Request phone number
-            keyboard = ReplyKeyboardMarkup(
-                keyboard=[[KeyboardButton(text="📱 Telefon raqamni yuborish", request_contact=True)]],
-                resize_keyboard=True,
-                one_time_keyboard=True
-            )
-            
-            await callback.answer()
-            await callback.message.answer(
-                messages["request_phone"],
-                reply_markup=keyboard
-            )
-
-
-@dp.message(F.contact)
-async def handle_contact(message: Message):
-    """Handle phone number from contact."""
-    user_id = message.from_user.id
-    user = message.from_user
-    contact = message.contact
-    
-    if not contact:
+    if selected_lang not in TRANSLATIONS:
+        await callback.answer()
         return
-    
-    phone_number = contact.phone_number
-    user_lang = user_languages.get(user_id, "uz")
-    messages = TRANSLATIONS[user_lang]
-    
-    # Store phone number
-    user_phone_numbers[user_id] = phone_number
-    
-    # Update user profile
-    if user_id in user_profiles:
-        user_profiles[user_id]["phone_number"] = phone_number
-    
-    # Update group message with phone number
-    await send_user_info_to_group(user_id, user, phone_number)
-    
-    # Get profile photo if not already stored
-    if user_id not in user_photo_urls:
+
+    _set_field(user_id, language=selected_lang,
+               first_name=user.first_name,
+               last_name=user.last_name,
+               username=user.username)
+
+    if not _get_field(user_id, "photo_url"):
         photo_path = await get_user_photo_url(user_id)
         if photo_path:
-            photo_url = f"https://api.telegram.org/file/bot{BOT_TOKEN}/{photo_path}"
-            user_photo_urls[user_id] = photo_url
-    
-    # Show confirmation and mini app button
-    web_app_url_with_lang = build_web_app_url(user_id, user_lang)
-    
+            _set_field(user_id, photo_url=f"https://api.telegram.org/file/bot{BOT_TOKEN}/{photo_path}")
+
+    try:
+        await send_user_info_to_group(user_id, user)
+    except Exception as e:
+        logger.error(f"Error sending user info to group: {e}")
+
+    msgs = TRANSLATIONS[selected_lang]
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text=messages["button"], web_app={"url": web_app_url_with_lang})]
+        [InlineKeyboardButton(text=msgs["button"], web_app={"url": build_web_app_url(user_id, selected_lang)})]
     ])
-    
-    # Remove keyboard
-    remove_keyboard = ReplyKeyboardMarkup(keyboard=[[]], resize_keyboard=True)
-    await message.answer(
-        messages["phone_received"],
-        reply_markup=remove_keyboard
-    )
-    
-    await message.answer(
-        messages["language_selected"],
-        reply_markup=keyboard
-    )
+    await callback.answer()
+    await callback.message.edit_text(msgs["language_selected"], reply_markup=keyboard)
 
 
 @dp.message(F.text & ~F.text.startswith('/'))
 async def handle_message(message: Message):
-    """Handle regular text messages."""
+    """Handle regular text messages — just reply with the fallback hint."""
     user_id = message.from_user.id
     user = message.from_user
-    user_lang = user_languages.get(user_id)
-    
-    # If user hasn't selected language, they might be trying to send phone manually
-    if user_id and user_lang and not user_phone_numbers.get(user_id):
-        # Check if message looks like a phone number
-        text = message.text.strip()
-        if text.replace('+', '').replace(' ', '').replace('-', '').replace('(', '').replace(')', '').isdigit() and len(text.replace('+', '').replace(' ', '').replace('-', '').replace('(', '').replace(')', '')) >= 9:
-            user_phone_numbers[user_id] = text
-            
-            # Update user profile
-            if user_id in user_profiles:
-                user_profiles[user_id]["phone_number"] = text
-            
-            # Update group message with phone number
-            await send_user_info_to_group(user_id, user, text)
-            
-            # Get profile photo if not already stored
-            if user_id not in user_photo_urls:
-                photo_path = await get_user_photo_url(user_id)
-                if photo_path:
-                    photo_url = f"https://api.telegram.org/file/bot{BOT_TOKEN}/{photo_path}"
-                    user_photo_urls[user_id] = photo_url
-            
-            messages = TRANSLATIONS[user_lang]
-            web_app_url_with_lang = build_web_app_url(user_id, user_lang)
-            
-            keyboard = InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text=messages["button"], web_app={"url": web_app_url_with_lang})]
-            ])
-            
-            await message.answer(
-                messages["phone_received"],
-                reply_markup=keyboard
-            )
-            return
-    
-    # Default fallback message
-    language = detect_language(user)
-    messages = TRANSLATIONS[language]
+    user_lang = _get_field(user_id, "language") or detect_language(user)
+    msgs = TRANSLATIONS[user_lang]
     logger.info("Received message from %s: %s", user_id, message.text)
-    await message.answer(messages["fallback"])
+    await message.answer(msgs["fallback"])
 
 
 @dp.message(Command("testgroup"))
@@ -530,22 +611,33 @@ async def error_handler(update, exception):
 
 
 async def main():
-    """Start the bot."""
-    logger.info('Starting bot...')
-    logger.info(f'Bot token: {BOT_TOKEN[:10]}...')
+    """Start the bot, HTTP sync API, and reminder scheduler."""
+    init_db()
+    logger.info("Starting Yodda bot…")
+    logger.info(f"Bot token: {BOT_TOKEN[:10]}…")
+
     if GROUP_ID:
-        logger.info(f'GROUP_ID: {GROUP_ID}')
-        # Test if we can access the group
+        logger.info(f"GROUP_ID: {GROUP_ID}")
         try:
             chat = await bot.get_chat(GROUP_ID)
-            logger.info(f'✅ Group found: {chat.title or chat.username or "Unknown"}')
+            logger.info(f"✅ Group found: {chat.title or chat.username or 'Unknown'}")
         except Exception as e:
-            logger.warning(f'⚠️  Cannot access group {GROUP_ID}: {e}')
-            logger.warning('   Make sure the bot is added to the group and GROUP_ID is correct')
+            logger.warning(f"⚠️  Cannot access group {GROUP_ID}: {e}")
     else:
-        logger.warning('⚠️  GROUP_ID not set - group messaging disabled')
-    
-    await dp.start_polling(bot, allowed_updates=["message", "callback_query"])
+        logger.warning("⚠️  GROUP_ID not set — group messaging disabled")
+
+    # Start the HTTP sync API
+    api_runner = await start_api_server()
+
+    # Start the reminder scheduler as a background task
+    scheduler_task = asyncio.create_task(run_reminder_scheduler())
+    logger.info("⏰ Reminder scheduler started")
+
+    try:
+        await dp.start_polling(bot, allowed_updates=["message", "callback_query"])
+    finally:
+        scheduler_task.cancel()
+        await api_runner.cleanup()
 
 
 if __name__ == '__main__':

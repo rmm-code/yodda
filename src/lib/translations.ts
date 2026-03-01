@@ -9,6 +9,15 @@ type TranslationSection = {
         logout: string;
         languageSelector: string;
         version: string;
+        remindersTitle: string;
+        remindersEnabled: string;
+        reminderDaysLabel: string;
+        reminderTimeLabel: string;
+        saveReminder: string;
+        reminderSaved: string;
+        nextReminder: string;
+        noUpcomingReminders: string;
+        dueNow: string;
     };
     tabs: {
         links: string;
@@ -21,6 +30,7 @@ type TranslationSection = {
         searchPlaceholder: string;
         all: string;
         noLinks: string;
+        noLinksHint: string;
         unknownFolder: string;
         addLink: string;
         urlLabel: string;
@@ -50,8 +60,10 @@ type TranslationSection = {
     subs: {
         title: string;
         noSubs: string;
+        noSubsHint: string;
         next: string;
         trackTitle: string;
+        editTitle: string;
         nameLabel: string;
         namePlaceholder: string;
         categoryLabel: string;
@@ -60,10 +72,14 @@ type TranslationSection = {
         cycleLabel: string;
         dateLabel: string;
         trackButton: string;
+        saveButton: string;
+        renewButton: string;
+        renewedLabel: string;
         monthly: string;
         yearly: string;
         byCategory: string;
         upcoming: string;
+        undoDelete: string;
         categories: {
             Education: string;
             Productivity: string;
@@ -91,6 +107,15 @@ const translations: Record<Language, TranslationSection> = {
             logout: "Log Out",
             languageSelector: "Language",
             version: "Version 1.0.0 • Yodda",
+            remindersTitle: "Renewal Reminders",
+            remindersEnabled: "Enable reminders",
+            reminderDaysLabel: "Remind me before (days)",
+            reminderTimeLabel: "Reminder time",
+            saveReminder: "Save reminder",
+            reminderSaved: "Saved",
+            nextReminder: "Next reminder",
+            noUpcomingReminders: "No upcoming reminders",
+            dueNow: "Due now",
         },
         tabs: {
             links: "Links",
@@ -102,7 +127,8 @@ const translations: Record<Language, TranslationSection> = {
             title: "Links",
             searchPlaceholder: "Search links...",
             all: "All",
-            noLinks: "No links found.",
+            noLinks: "No links found",
+            noLinksHint: "Tap + to save your first link",
             unknownFolder: "Unknown",
             addLink: "Save Link",
             urlLabel: "URL",
@@ -131,9 +157,11 @@ const translations: Record<Language, TranslationSection> = {
         },
         subs: {
             title: "Subscriptions",
-            noSubs: "No subscriptions tracked yet.",
+            noSubs: "No subscriptions yet",
+            noSubsHint: "Tap + to track your first subscription",
             next: "Next:",
             trackTitle: "Track Subscription",
+            editTitle: "Edit Subscription",
             nameLabel: "Name",
             namePlaceholder: "Netflix, Spotify...",
             categoryLabel: "Category",
@@ -142,10 +170,14 @@ const translations: Record<Language, TranslationSection> = {
             cycleLabel: "Billing Cycle",
             dateLabel: "Next Bill Date",
             trackButton: "Track Subscription",
+            saveButton: "Save Changes",
+            renewButton: "Renew",
+            renewedLabel: "Renewed",
             monthly: "Monthly",
             yearly: "Yearly",
             byCategory: "By Category",
             upcoming: "Upcoming (Next 7 Days)",
+            undoDelete: "Subscription deleted",
             categories: {
                 Education: "Education",
                 Productivity: "Productivity",
@@ -171,6 +203,15 @@ const translations: Record<Language, TranslationSection> = {
             logout: "Выйти",
             languageSelector: "Язык",
             version: "Версия 1.0.0 • Yodda",
+            remindersTitle: "Напоминания о продлении",
+            remindersEnabled: "Включить напоминания",
+            reminderDaysLabel: "Напомнить за (дней)",
+            reminderTimeLabel: "Время напоминания",
+            saveReminder: "Сохранить напоминание",
+            reminderSaved: "Сохранено",
+            nextReminder: "Следующее напоминание",
+            noUpcomingReminders: "Нет ближайших напоминаний",
+            dueNow: "Сейчас",
         },
         tabs: {
             links: "Ссылки",
@@ -182,7 +223,8 @@ const translations: Record<Language, TranslationSection> = {
             title: "Ссылки",
             searchPlaceholder: "Поиск ссылок...",
             all: "Все",
-            noLinks: "Ссылки не найдены.",
+            noLinks: "Ссылки не найдены",
+            noLinksHint: "Нажмите + чтобы сохранить первую ссылку",
             unknownFolder: "Неизвестно",
             addLink: "Сохранить ссылку",
             urlLabel: "URL",
@@ -211,9 +253,11 @@ const translations: Record<Language, TranslationSection> = {
         },
         subs: {
             title: "Подписки",
-            noSubs: "Нет подписок.",
+            noSubs: "Нет подписок",
+            noSubsHint: "Нажмите + чтобы добавить первую подписку",
             next: "След:",
             trackTitle: "Добавить подписку",
+            editTitle: "Изменить подписку",
             nameLabel: "Название",
             namePlaceholder: "Netflix, Spotify...",
             categoryLabel: "Категория",
@@ -222,10 +266,14 @@ const translations: Record<Language, TranslationSection> = {
             cycleLabel: "Цикл оплаты",
             dateLabel: "Дата след. оплаты",
             trackButton: "Добавить",
+            saveButton: "Сохранить",
+            renewButton: "Продлить",
+            renewedLabel: "Продлено",
             monthly: "Ежемесячно",
             yearly: "Ежегодно",
             byCategory: "По категориям",
             upcoming: "Ближайшие (7 дней)",
+            undoDelete: "Подписка удалена",
             categories: {
                 Education: "Образование",
                 Productivity: "Продуктивность",
@@ -251,6 +299,15 @@ const translations: Record<Language, TranslationSection> = {
             logout: "Chiqish",
             languageSelector: "Til",
             version: "Versiya 1.0.0 • Yodda",
+            remindersTitle: "Obunani eslatmalar",
+            remindersEnabled: "Eslatmalarni yoqish",
+            reminderDaysLabel: "Necha kun oldin eslatilsin",
+            reminderTimeLabel: "Eslatma vaqti",
+            saveReminder: "Eslatmani saqlash",
+            reminderSaved: "Saqlandi",
+            nextReminder: "Keyingi eslatma",
+            noUpcomingReminders: "Yaqin eslatmalar yo'q",
+            dueNow: "Hozir eslatish kerak",
         },
         tabs: {
             links: "Havolalar",
@@ -262,7 +319,8 @@ const translations: Record<Language, TranslationSection> = {
             title: "Havolalar",
             searchPlaceholder: "Qidirish...",
             all: "Barchasi",
-            noLinks: "Havolalar topilmadi.",
+            noLinks: "Havolalar topilmadi",
+            noLinksHint: "Birinchi havolani saqlash uchun + tugmasini bosing",
             unknownFolder: "Noma'lum",
             addLink: "Havolani saqlash",
             urlLabel: "URL",
@@ -291,9 +349,11 @@ const translations: Record<Language, TranslationSection> = {
         },
         subs: {
             title: "Obunalar",
-            noSubs: "Obunalar yo'q.",
+            noSubs: "Hali obunalar yo'q",
+            noSubsHint: "Birinchi obunangizni qo'shish uchun + tugmasini bosing",
             next: "Keyingi:",
             trackTitle: "Obuna qo'shish",
+            editTitle: "Obunani tahrirlash",
             nameLabel: "Nomi",
             namePlaceholder: "Netflix, Spotify...",
             categoryLabel: "Toifa",
@@ -302,10 +362,14 @@ const translations: Record<Language, TranslationSection> = {
             cycleLabel: "To'lov davri",
             dateLabel: "Keyingi to'lov",
             trackButton: "Qo'shish",
+            saveButton: "Saqlash",
+            renewButton: "Yangilash",
+            renewedLabel: "Yangilandi",
             monthly: "Oylik",
             yearly: "Yillik",
             byCategory: "Toifalar bo'yicha",
             upcoming: "Yaqinlashayotgan (7 kun)",
+            undoDelete: "Obuna o'chirildi",
             categories: {
                 Education: "Ta'lim",
                 Productivity: "Ish unumdorligi",

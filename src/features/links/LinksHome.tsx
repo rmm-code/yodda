@@ -1,6 +1,6 @@
 import * as React from "react";
-import { Plus, Search, Star, ExternalLink, Trash2 } from "lucide-react";
-import { useLinkStore } from "./useLinkStore";
+import { Plus, Search, Star, ExternalLink, Trash2, Link2 } from "lucide-react";
+import { useLinkStore, type Link } from "./useLinkStore";
 import { AddLinkModal } from "./AddLinkModal";
 import { Card } from "../../components/ui/Card";
 import { Input } from "../../components/ui/Input";
@@ -13,6 +13,7 @@ export function LinksHome() {
     const [isAddModalOpen, setIsAddModalOpen] = React.useState(false);
     const [searchQuery, setSearchQuery] = React.useState("");
     const [selectedFolderId, setSelectedFolderId] = React.useState<string | null>(null);
+    const [undoToast, setUndoToast] = React.useState<{ link: Link; timer: ReturnType<typeof setTimeout> } | null>(null);
     const { language } = useLanguageStore();
     const t = getTranslations(language);
 
@@ -27,6 +28,25 @@ export function LinksHome() {
     const getFolderName = (id: string) => {
         if (id === "default") return t.folders.general;
         return folders.find((f) => f.id === id)?.name || t.links.unknownFolder;
+    };
+
+    const handleDeleteLink = (link: Link) => {
+        if (undoToast) {
+            clearTimeout(undoToast.timer);
+        }
+        deleteLink(link.id);
+        const timer = setTimeout(() => setUndoToast(null), 3500);
+        setUndoToast({ link, timer });
+    };
+
+    const handleUndoLink = () => {
+        if (!undoToast) return;
+        clearTimeout(undoToast.timer);
+        const { link } = undoToast;
+        useLinkStore.setState((state) => ({
+            links: [link, ...state.links],
+        }));
+        setUndoToast(null);
     };
 
     return (
@@ -85,11 +105,12 @@ export function LinksHome() {
             {/* Link List */}
             <div className="space-y-3">
                 {filteredLinks.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center py-12 text-center">
-                        <div className="mb-4 rounded-full bg-gray-100 dark:bg-gray-800 p-4">
-                            <Search className="h-8 w-8 text-gray-400 dark:text-gray-500" />
+                    <div className="flex flex-col items-center justify-center py-16 text-center">
+                        <div className="mb-4 rounded-full bg-gray-100 dark:bg-gray-800 p-5">
+                            <Link2 className="h-10 w-10 text-gray-300 dark:text-gray-600" />
                         </div>
-                        <p className="text-gray-500 dark:text-gray-400">{t.links.noLinks}</p>
+                        <p className="font-semibold text-gray-700 dark:text-gray-300">{t.links.noLinks}</p>
+                        <p className="mt-1 text-sm text-gray-400 dark:text-gray-500">{t.links.noLinksHint}</p>
                     </div>
                 ) : (
                     filteredLinks.map((link) => (
@@ -142,7 +163,7 @@ export function LinksHome() {
                                     {getFolderName(link.folder_id)}
                                 </span>
                                 <button
-                                    onClick={() => deleteLink(link.id)}
+                                    onClick={() => handleDeleteLink(link)}
                                     className="text-gray-400 hover:text-red-500 dark:text-gray-500 dark:hover:text-red-400"
                                 >
                                     <Trash2 className="h-4 w-4" />
@@ -152,6 +173,19 @@ export function LinksHome() {
                     ))
                 )}
             </div>
+
+            {/* Undo Toast */}
+            {undoToast && (
+                <div className="fixed bottom-24 left-4 right-4 z-50 flex items-center justify-between rounded-xl bg-gray-900 dark:bg-gray-700 px-4 py-3 shadow-lg">
+                    <span className="text-sm text-white truncate">{undoToast.link.title}</span>
+                    <button
+                        onClick={handleUndoLink}
+                        className="ml-4 flex-shrink-0 text-sm font-semibold text-blue-400 hover:text-blue-300"
+                    >
+                        Undo
+                    </button>
+                </div>
+            )}
 
             <AddLinkModal isOpen={isAddModalOpen} onClose={() => setIsAddModalOpen(false)} />
         </div>

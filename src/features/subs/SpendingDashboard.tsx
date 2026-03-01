@@ -11,9 +11,10 @@ export function SpendingDashboard() {
     const { language } = useLanguageStore();
     const t = getTranslations(language);
 
-    // Calculate totals
+    // Calculate totals — normalise everything to USD equivalent using stored amounts
+    // We use the most common currency among subscriptions for the summary display
     const totals = React.useMemo(() => {
-        let monthly = 0;
+        const currencyTotals: Record<string, number> = {};
 
         subscriptions.forEach((sub) => {
             let monthlyAmount = sub.amount;
@@ -22,10 +23,15 @@ export function SpendingDashboard() {
             } else if (sub.billing_cycle_type === "yearly") {
                 monthlyAmount = sub.amount / 12;
             }
-            monthly += monthlyAmount;
+            currencyTotals[sub.currency] = (currencyTotals[sub.currency] || 0) + monthlyAmount;
         });
 
-        return { monthly, yearly: monthly * 12 };
+        // Pick the dominant currency (highest total) for display
+        const dominantCurrency = Object.entries(currencyTotals).sort((a, b) => b[1] - a[1])[0];
+        const monthly = dominantCurrency?.[1] ?? 0;
+        const currency = dominantCurrency?.[0] ?? "USD";
+
+        return { monthly, yearly: monthly * 12, currency };
     }, [subscriptions]);
 
     // Calculate by category
@@ -104,7 +110,7 @@ export function SpendingDashboard() {
                     <div className="flex items-center justify-between">
                         <div>
                             <p className="text-blue-100 text-xs font-medium mb-1">{t.subs.monthly}</p>
-                            <h3 className="text-2xl font-bold">{formatCurrency(totals.monthly)}</h3>
+                            <h3 className="text-2xl font-bold">{formatCurrency(totals.monthly, totals.currency)}</h3>
                         </div>
                         <DollarSign className="h-8 w-8 text-blue-200" />
                     </div>
@@ -114,7 +120,7 @@ export function SpendingDashboard() {
                     <div className="flex items-center justify-between">
                         <div>
                             <p className="text-green-100 text-xs font-medium mb-1">{t.subs.yearly}</p>
-                            <h3 className="text-2xl font-bold">{formatCurrency(totals.yearly)}</h3>
+                            <h3 className="text-2xl font-bold">{formatCurrency(totals.yearly, totals.currency)}</h3>
                         </div>
                         <TrendingUp className="h-8 w-8 text-green-200" />
                     </div>

@@ -8,6 +8,11 @@ export interface UserProfile {
     username?: string;
     phoneNumber?: string;
     photoUrl?: string;
+    reminderPreference?: {
+        enabled: boolean;
+        leadDays: number;
+        reminderTime: string;
+    };
 }
 
 interface UserState {

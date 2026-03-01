@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { v4 as uuidv4 } from "uuid";
+import { scheduleSyncSubscriptions } from "../../lib/syncSubscriptions";
 
 export type Category = "Education" | "Productivity" | "Entertainment" | "Finance" | "Health" | "Other";
 export type BillingCycle = "weekly" | "monthly" | "yearly" | "custom";
@@ -38,21 +39,29 @@ export const useSubStore = create<SubState>()(
                     id: uuidv4(),
                     created_at: new Date().toISOString(),
                 };
-                set((state) => ({ subscriptions: [newSub, ...state.subscriptions] }));
+                set((state) => {
+                    const next = [newSub, ...state.subscriptions];
+                    scheduleSyncSubscriptions(next);
+                    return { subscriptions: next };
+                });
             },
 
             updateSubscription: (id, updates) => {
-                set((state) => ({
-                    subscriptions: state.subscriptions.map((s) =>
+                set((state) => {
+                    const next = state.subscriptions.map((s) =>
                         s.id === id ? { ...s, ...updates } : s
-                    ),
-                }));
+                    );
+                    scheduleSyncSubscriptions(next);
+                    return { subscriptions: next };
+                });
             },
 
             deleteSubscription: (id) => {
-                set((state) => ({
-                    subscriptions: state.subscriptions.filter((s) => s.id !== id),
-                }));
+                set((state) => {
+                    const next = state.subscriptions.filter((s) => s.id !== id);
+                    scheduleSyncSubscriptions(next);
+                    return { subscriptions: next };
+                });
             },
         }),
         {

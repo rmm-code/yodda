@@ -39,6 +39,26 @@ A Telegram mini app for managing links, folders, and subscriptions with multi-la
    python bot.py
    ```
 
+## 🧠 Python Subscription Manager (Data Structures)
+
+This repo now includes a simple Python manager that uses:
+
+- `Linked List` to store all subscriptions
+- `Queue` for upcoming reminders
+- `Stack` for undo deleted/cancelled subscriptions
+- `Searching` by subscription name
+- `Sorting` by renewal date, price, or category
+
+Files:
+
+- `subscription_manager.py` — core data structures, subscription operations, and runnable example
+
+Run the example:
+
+```bash
+python subscription_manager.py
+```
+
 ### Testing with Telegram
 
 To test the mini app in Telegram, you need to expose your localhost:
